@@ -18,6 +18,8 @@ ENV RUSTUP_HOME=/usr/local/rust
 ENV PATH="$PATH:$CARGO_HOME/bin"
 ENV LC_ALL=C.UTF-8
 
+ENV QPL_COMMIT_TO_USE="3c21a13e43bd668be2bfc4a88c0a66a50e0b14cd"
+
 # Install system dependencies
 #
 RUN apt-get update \
@@ -59,10 +61,29 @@ RUN apt-get update \
         dmidecode \
         # for aws-lc-rs
         cmake \
+        # for compression library (based on Intel QPL)
+        uuid-dev \
+        libgflags-dev \
+        libgoogle-glog-dev \
     && rm -rf /var/lib/apt/lists/* \
     && pip3 install --upgrade pip poetry \
     && gem install mdl
 
+# Install NASM (needed for Intel QPL).
+RUN curl https://www.nasm.us/pub/nasm/releasebuilds/2.16.01/nasm-2.16.01.tar.gz > nasm-2.16.01.tar.gz && \
+    tar -xvf nasm-2.16.01.tar.gz && \
+    cd nasm-2.16.01 && \
+    sh autogen.sh && \
+    sh configure && \
+    make -j && \
+    make install
+
+# Install Intel QPL.
+RUN git clone --recursive https://github.com/intel/qpl.git && cd qpl && \
+    git checkout $QPL_COMMIT_TO_USE && \
+    mkdir build && cd build && \
+    cmake -DCMAKE_INSTALL_PREFIX=/usr/local/qpl .. && \
+    make -j && make install
 
 COPY tools/devctr /tmp/poetry
 RUN cd /tmp/poetry && \
@@ -73,7 +94,8 @@ RUN cd /tmp/poetry && \
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain "$RUST_TOOLCHAIN" \
     && rustup target add $ARCH-unknown-linux-musl \
     && rustup component add llvm-tools-preview \
-    && cargo install cargo-audit cargo-deny grcov cargo-sort \
+    && cargo install cargo-audit grcov cargo-sort \
+    && cargo install --locked cargo-deny \
     && (if [ "$ARCH" = "x86_64" ]; then cargo install kani-verifier && cargo kani setup; else true; fi) \
     && rm -rf "$CARGO_HOME/registry" \
     && ln -s "$CARGO_REGISTRY_DIR" "$CARGO_HOME/registry" \

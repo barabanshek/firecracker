@@ -9,6 +9,8 @@ use std::fmt::Debug;
 use std::io::{Error as IoError, ErrorKind};
 use std::os::unix::io::AsRawFd;
 
+use std::time::Instant;
+
 pub use vm_memory::bitmap::{AtomicBitmap, Bitmap, BitmapSlice, BS};
 use vm_memory::mmap::{check_file_offset, NewBitmap};
 pub use vm_memory::mmap::{MmapRegionBuilder, MmapRegionError};
@@ -23,6 +25,19 @@ pub type GuestRegionMmap = vm_memory::GuestRegionMmap<Option<AtomicBitmap>>;
 pub type GuestMmapRegion = vm_memory::MmapRegion<Option<AtomicBitmap>>;
 
 const GUARD_PAGE_COUNT: usize = 1;
+
+use libc::size_t;
+
+extern "C" {
+    fn decompress(src: *const u8, src_size: usize, dst: *mut u8, dst_reserved_size: usize, dst_actual_size: *mut usize) -> u32;
+}
+
+// Test FFI.
+// #[link(name = "compression_engine")]
+// #[link(name = "compression_engine-c")]
+// extern "C" {
+//     fn rust_ffi_test() -> (); 
+// }
 
 /// Build a `MmapRegion` surrounded by guard pages.
 ///
@@ -45,67 +60,171 @@ fn build_guarded_region(
     track_dirty_pages: bool,
 ) -> Result<GuestMmapRegion, MmapRegionError> {
     let page_size = crate::get_page_size().expect("Cannot retrieve page size.");
-    // Create the guarded range size (received size + X pages),
-    // where X is defined as a constant GUARD_PAGE_COUNT.
-    let guarded_size = size + GUARD_PAGE_COUNT * 2 * page_size;
 
-    // Map the guarded range to PROT_NONE
-    // SAFETY: Safe because the parameters are valid.
-    let guard_addr = unsafe {
-        libc::mmap(
-            std::ptr::null_mut(),
-            guarded_size,
-            libc::PROT_NONE,
-            libc::MAP_ANONYMOUS | libc::MAP_PRIVATE | libc::MAP_NORESERVE,
-            -1,
-            0,
-        )
-    };
+    let compressed = false;
 
-    if guard_addr == libc::MAP_FAILED {
-        return Err(MmapRegionError::Mmap(IoError::last_os_error()));
-    }
+    if compressed {
+        // Load file.
+        let (fd, offset, file_size) = match maybe_file_offset {
+            Some(ref file_offset) => {
+                // check_file_offset(file_offset, size)?;
+                (file_offset.file().as_raw_fd(), file_offset.start(), file_offset.file().metadata().unwrap().len())
+            }
+            None => (-1, 0, 0),
+        };
 
-    let (fd, offset) = match maybe_file_offset {
-        Some(ref file_offset) => {
-            check_file_offset(file_offset, size)?;
-            (file_offset.file().as_raw_fd(), file_offset.start())
+        // Mmap file.
+        let file_region_addr = unsafe {
+            libc::mmap(
+                std::ptr::null_mut(),
+                file_size as usize,
+                prot,
+                libc::MAP_PRIVATE, // flags | libc::MAP_FIXED,
+                fd,
+                libc::off_t::try_from(offset).unwrap(),
+            )
+        };
+        if file_region_addr == libc::MAP_FAILED {
+            println!("Failed to mamp file.");
+            return Err(MmapRegionError::Mmap(IoError::last_os_error()));
         }
-        None => (-1, 0),
-    };
 
-    let region_start_addr = guard_addr as usize + page_size * GUARD_PAGE_COUNT;
+        // Bring file.
+        // println!("Touching..., {} {} {}", size, offset, file_size);
+        // let touch = Instant::now();
+        let mut a: u64 = 0;
+        unsafe {        
+            for i in (0..file_size).step_by(page_size) {
+                a += *(file_region_addr.cast::<u8>().offset(i as isize)) as u64;
+            }
+        }
+        // let touch_elapsed = touch.elapsed();
+        // println!("Touched ({}), took {:?}", a, touch_elapsed);
 
-    // Inside the protected range, starting with guard_addr + PAGE_SIZE,
-    // map the requested range with received protection and flags
-    // SAFETY: Safe because the parameters are valid.
-    let region_addr = unsafe {
-        libc::mmap(
-            region_start_addr as *mut libc::c_void,
-            size,
-            prot,
-            flags | libc::MAP_FIXED,
-            fd,
-            libc::off_t::try_from(offset).unwrap(),
-        )
-    };
+        // Create the guarded range size (received size + X pages),
+        // where X is defined as a constant GUARD_PAGE_COUNT.
+        let guarded_size = size + GUARD_PAGE_COUNT * 2 * page_size;
 
-    if region_addr == libc::MAP_FAILED {
-        return Err(MmapRegionError::Mmap(IoError::last_os_error()));
-    }
+        // Map the guarded range to PROT_NONE
+        // SAFETY: Safe because the parameters are valid.
+        let touch = Instant::now();
+        let guard_addr = unsafe {
+            libc::mmap(
+                std::ptr::null_mut(),
+                guarded_size,
+                prot,
+                libc::MAP_ANONYMOUS | libc::MAP_PRIVATE | libc::MAP_NORESERVE | libc::MAP_POPULATE | libc::MAP_STACK | libc::MAP_HUGETLB,
+                -1,
+                0,
+            )
+        };
 
-    let bitmap = match track_dirty_pages {
-        true => Some(AtomicBitmap::with_len(size)),
-        false => None,
-    };
+        let touch_elapsed = touch.elapsed();
+        println!("Allocated, took {:?}", touch_elapsed);
 
-    // SAFETY: Safe because the parameters are valid.
-    unsafe {
-        MmapRegionBuilder::new_with_bitmap(size, bitmap)
-            .with_raw_mmap_pointer(region_addr.cast::<u8>())
-            .with_mmap_prot(prot)
-            .with_mmap_flags(flags)
-            .build()
+        if guard_addr == libc::MAP_FAILED {
+            println!("Failed to mmap region.");
+            return Err(MmapRegionError::Mmap(IoError::last_os_error()));
+        }
+
+        let region_start_addr: *mut u8;
+        unsafe {
+            region_start_addr = guard_addr.cast::<u8>().add(page_size * GUARD_PAGE_COUNT);
+        }
+
+        // Decompress.
+        let decompress_t = Instant::now();
+        let mut decompress_size: usize = 0;
+        unsafe {
+            let decpmpress_size_ptr = &mut decompress_size as *mut usize;
+            if decompress(file_region_addr.cast::<u8>(), file_size as usize, region_start_addr, size, decpmpress_size_ptr) != 0 {
+                println!("Failed to decompress region.");
+                return Err(MmapRegionError::Mmap(IoError::last_os_error()));
+            }
+            if decompress_size != size {
+                println!("Wrong size after decompression.");
+                return Err(MmapRegionError::Mmap(IoError::last_os_error()));
+            }
+        }
+        let decompress_elapsed = decompress_t.elapsed();
+        println!("Memory decompressed, took {:?}", decompress_elapsed);
+
+        let region_addr = region_start_addr as *mut libc::c_void;
+
+        let bitmap = match track_dirty_pages {
+            true => Some(AtomicBitmap::with_len(size)),
+            false => None,
+        };
+
+        // SAFETY: Safe because the parameters are valid.
+        unsafe {
+            MmapRegionBuilder::new_with_bitmap(size, bitmap)
+                .with_raw_mmap_pointer(region_addr.cast::<u8>())
+                .with_mmap_prot(prot)
+                .with_mmap_flags(flags)
+                .build()
+        }
+    } else {
+        let guarded_size = size + GUARD_PAGE_COUNT * 2 * page_size;
+
+        // Map the guarded range to PROT_NONE
+        // SAFETY: Safe because the parameters are valid.
+        let guard_addr = unsafe {
+            libc::mmap(
+                std::ptr::null_mut(),
+                guarded_size,
+                libc::PROT_NONE,
+                libc::MAP_ANONYMOUS | libc::MAP_PRIVATE | libc::MAP_NORESERVE,
+                -1,
+                0,
+            )
+        };
+    
+        if guard_addr == libc::MAP_FAILED {
+            return Err(MmapRegionError::Mmap(IoError::last_os_error()));
+        }
+    
+        let (fd, offset) = match maybe_file_offset {
+            Some(ref file_offset) => {
+                check_file_offset(file_offset, size)?;
+                (file_offset.file().as_raw_fd(), file_offset.start())
+            }
+            None => (-1, 0),
+        };
+    
+        let region_start_addr = guard_addr as usize + page_size * GUARD_PAGE_COUNT;
+    
+        // Inside the protected range, starting with guard_addr + PAGE_SIZE,
+        // map the requested range with received protection and flags
+        // SAFETY: Safe because the parameters are valid.
+        let region_addr = unsafe {
+            libc::mmap(
+                region_start_addr as *mut libc::c_void,
+                size,
+                prot,
+                flags | libc::MAP_FIXED,
+                fd,
+                libc::off_t::try_from(offset).unwrap(),
+            )
+        };
+    
+        if region_addr == libc::MAP_FAILED {
+            return Err(MmapRegionError::Mmap(IoError::last_os_error()));
+        }
+    
+        let bitmap = match track_dirty_pages {
+            true => Some(AtomicBitmap::with_len(size)),
+            false => None,
+        };
+    
+        // SAFETY: Safe because the parameters are valid.
+        unsafe {
+            MmapRegionBuilder::new_with_bitmap(size, bitmap)
+                .with_raw_mmap_pointer(region_addr.cast::<u8>())
+                .with_mmap_prot(prot)
+                .with_mmap_flags(flags)
+                .build()
+        }
     }
 }
 

@@ -8,7 +8,7 @@ use std::io::SeekFrom;
 
 use utils::vm_memory::{
     Bitmap, FileOffset, GuestAddress, GuestMemory, GuestMemoryError, GuestMemoryMmap,
-    GuestMemoryRegion, MemoryRegionAddress, WriteVolatile,
+    GuestMemoryRegion, MemoryRegionAddress, WriteVolatile, VolatileSlice,
 };
 use utils::{errno, get_page_size};
 use versionize::{VersionMap, Versionize, VersionizeResult};
@@ -38,6 +38,17 @@ pub struct GuestMemoryState {
     pub regions: Vec<GuestMemoryRegionState>,
 }
 
+#[allow(missing_docs)]
+pub trait CorrectSize {
+    fn correct_size(&self, size: usize) -> ();
+}
+
+impl CorrectSize for std::fs::File {
+    fn correct_size(&self, size: usize) -> () {
+        self.set_len(size as u64);
+    }
+}
+
 /// Defines the interface for snapshotting memory.
 pub trait SnapshotMemory
 where
@@ -46,7 +57,7 @@ where
     /// Describes GuestMemoryMmap through a GuestMemoryState struct.
     fn describe(&self) -> GuestMemoryState;
     /// Dumps all contents of GuestMemoryMmap to a writer.
-    fn dump<T: WriteVolatile>(&self, writer: &mut T) -> Result<(), SnapshotMemoryError>;
+    fn dump<T: WriteVolatile + CorrectSize>(&self, writer: &mut T) -> Result<(), SnapshotMemoryError>;
     /// Dumps all pages of GuestMemoryMmap present in `dirty_bitmap` to a writer.
     fn dump_dirty<T: WriteVolatile + std::io::Seek>(
         &self,
@@ -77,6 +88,11 @@ pub enum SnapshotMemoryError {
     WriteMemory(#[from] GuestMemoryError),
 }
 
+extern "C" {
+    fn rust_ffi_test(data: u32) -> ();
+    fn compress(src: *const u8, src_size: usize, dst: *mut u8, dst_size: *mut usize, job_n: u8) -> u32;
+}
+
 impl SnapshotMemory for GuestMemoryMmap {
     /// Describes GuestMemoryMmap through a GuestMemoryState struct.
     fn describe(&self) -> GuestMemoryState {
@@ -95,10 +111,59 @@ impl SnapshotMemory for GuestMemoryMmap {
     }
 
     /// Dumps all contents of GuestMemoryMmap to a writer.
-    fn dump<T: WriteVolatile>(&self, writer: &mut T) -> Result<(), SnapshotMemoryError> {
-        self.iter()
-            .try_for_each(|region| Ok(writer.write_all_volatile(&region.as_volatile_slice()?)?))
-            .map_err(SnapshotMemoryError::WriteMemory)
+    fn dump<T: WriteVolatile + CorrectSize>(&self, writer: &mut T) -> Result<(), SnapshotMemoryError> {
+        //
+        let mut compressed = false;
+        // let mut guard_addr = std::ptr::null_mut();
+        // let mut compressed_size: usize = 0;
+        // self.iter().for_each(|region| {
+        //     println!("compressing region {:p}: {}", region.as_ptr(), region.len());
+
+        //     // Allocate new region.
+        //     let region_size =  region.len() as usize;
+        //     let compress_region_size: usize = region_size;
+        //     guard_addr = unsafe {
+        //         libc::mmap(
+        //             std::ptr::null_mut(),
+        //             compress_region_size,
+        //             libc::PROT_READ | libc::PROT_WRITE,
+        //             libc::MAP_ANONYMOUS | libc::MAP_PRIVATE | libc::MAP_NORESERVE,
+        //             -1,
+        //             0,
+        //         )
+        //     };
+
+        //     let compressed_size_ptr = &mut compressed_size as *mut usize;
+
+        //     unsafe {   
+        //         if guard_addr == libc::MAP_FAILED {
+        //             println!("Failed to allocate region for compressed region, no compression will be made.");
+        //         } else 
+        //         if compress(region.as_ptr(), region_size, guard_addr.cast::<u8>(), compressed_size_ptr, 1) != 0 {
+        //             println!("Failed to compress region.");
+        //         } else {
+        //             println!("VM memory compressed, size= {} MB", compressed_size / (1024 * 1024));
+        //             compressed = true;
+        //         }
+        //     }
+        // });
+
+        //
+        // writer.correct_size(compressed_size);
+
+        // if compressed == false {
+            println!("Writing standard snapshot.");
+            self.iter()
+                .try_for_each(|region| Ok(writer.write_all_volatile(&region.as_volatile_slice()?)?))
+                .map_err(SnapshotMemoryError::WriteMemory)
+        // } else {
+        //     println!("Writing compressed snapshot.");
+        //     unsafe { 
+        //         let slice = VolatileSlice::new(guard_addr.cast::<u8>(), compressed_size);
+        //         writer.write_all_volatile(&slice);
+        //     }
+        //     Ok(())
+        // }
     }
 
     /// Dumps all pages of GuestMemoryMmap present in `dirty_bitmap` to a writer.
@@ -107,6 +172,7 @@ impl SnapshotMemory for GuestMemoryMmap {
         writer: &mut T,
         dirty_bitmap: &DirtyBitmap,
     ) -> Result<(), SnapshotMemoryError> {
+        println!("Diff snapshot")
         let mut writer_offset = 0;
         let page_size = get_page_size()?;
 
@@ -177,6 +243,7 @@ impl SnapshotMemory for GuestMemoryMmap {
             };
 
             regions.push((f, GuestAddress(region.base_address), region.size));
+            println!("Restore region");
         }
 
         utils::vm_memory::create_guest_memory(&regions, track_dirty_pages)
