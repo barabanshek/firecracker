@@ -112,6 +112,7 @@ fn parse_put_snapshot_load(body: &Body) -> Result<ParsedRequest, Error> {
         mem_backend,
         enable_diff_snapshots: snapshot_config.enable_diff_snapshots,
         resume_vm: snapshot_config.resume_vm,
+        // enable_from_compress: true,
     };
 
     // Construct the `ParsedRequest` object.

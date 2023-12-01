@@ -10,4 +10,7 @@ __pycache__
 test_results/*
 *.core
 *.profraw
+
+/iaa_qpl_compress/build/
+
 .DS_Store

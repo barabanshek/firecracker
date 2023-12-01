@@ -77,7 +77,8 @@ DEVCTR_IMAGE_TAG=${DEVCTR_IMAGE_TAG:-v64}
 # Development container image (name:tag)
 # This should be updated whenever we upgrade the development container.
 # (Yet another step on our way to reproducible builds.)
-DEVCTR_IMAGE="${DEVCTR_IMAGE_NO_TAG}:${DEVCTR_IMAGE_TAG}"
+# DEVCTR_IMAGE="${DEVCTR_IMAGE_NO_TAG}:${DEVCTR_IMAGE_TAG}"
+DEVCTR_IMAGE="${DEVCTR_IMAGE_NO_TAG}:latest"
 
 # Full path to the Firecracker tools dir on the host.
 FC_TOOLS_DIR=$(cd "$(dirname "$0")" && pwd)

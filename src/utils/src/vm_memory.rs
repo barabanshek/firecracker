@@ -6,8 +6,11 @@
 // found in the THIRD-PARTY file.
 
 use std::fmt::Debug;
+use std::env;
 use std::io::{Error as IoError, ErrorKind};
 use std::os::unix::io::AsRawFd;
+
+use std::time::Instant;
 
 pub use vm_memory::bitmap::{AtomicBitmap, Bitmap, BitmapSlice, BS};
 use vm_memory::mmap::{check_file_offset, NewBitmap};
@@ -23,6 +26,14 @@ pub type GuestRegionMmap = vm_memory::GuestRegionMmap<Option<AtomicBitmap>>;
 pub type GuestMmapRegion = vm_memory::MmapRegion<Option<AtomicBitmap>>;
 
 const GUARD_PAGE_COUNT: usize = 1;
+
+use libc::size_t;
+
+extern "C" {
+    fn RestorePartitions(filename: *const i8, m_addr: u64, m_size: u64) -> u8;
+    fn InitReapRecorder(r_addr: u64, r_size: u64, snapshot_filename: *const i8, ws_filename: *const i8) -> u8;
+    fn RestoreReapSnapshot(r_addr: u64, r_size: u64, snapshot_filename: *const i8, ws_filename: *const i8) -> u8;
+}
 
 /// Build a `MmapRegion` surrounded by guard pages.
 ///
@@ -43,69 +54,180 @@ fn build_guarded_region(
     prot: i32,
     flags: i32,
     track_dirty_pages: bool,
+    restoration_phase: bool
 ) -> Result<GuestMmapRegion, MmapRegionError> {
     let page_size = crate::get_page_size().expect("Cannot retrieve page size.");
-    // Create the guarded range size (received size + X pages),
-    // where X is defined as a constant GUARD_PAGE_COUNT.
+
+    let do_compression = env::var("FIRECRACKER_SNAPSHOT_COMPRESSION").expect("$FIRECRACKER_SNAPSHOT_COMPRESSION is not set") == "Enabled";
+    let do_reap_recording= env::var("FIRECRACKER_SNAPSHOT_REAP_RECORD").expect("$FIRECRACKER_SNAPSHOT_REAP_RECORD is not set") == "Enabled";
+    let do_reap_restore =env::var("FIRECRACKER_SNAPSHOT_REAP_RESTORE").expect("$FIRECRACKER_SNAPSHOT_REAP_RESTORE is not set") == "Enabled";
+
+    let START = Instant::now();
+
     let guarded_size = size + GUARD_PAGE_COUNT * 2 * page_size;
-
-    // Map the guarded range to PROT_NONE
-    // SAFETY: Safe because the parameters are valid.
-    let guard_addr = unsafe {
-        libc::mmap(
-            std::ptr::null_mut(),
-            guarded_size,
-            libc::PROT_NONE,
-            libc::MAP_ANONYMOUS | libc::MAP_PRIVATE | libc::MAP_NORESERVE,
-            -1,
-            0,
-        )
-    };
-
-    if guard_addr == libc::MAP_FAILED {
-        return Err(MmapRegionError::Mmap(IoError::last_os_error()));
-    }
-
-    let (fd, offset) = match maybe_file_offset {
-        Some(ref file_offset) => {
-            check_file_offset(file_offset, size)?;
-            (file_offset.file().as_raw_fd(), file_offset.start())
+    if restoration_phase && do_compression {
+        // Map the guarded range to PROT_NONE
+        // SAFETY: Safe because the parameters are valid.
+        let guard_addr = unsafe {
+            libc::mmap(
+                std::ptr::null_mut(),
+                guarded_size,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_ANONYMOUS | libc::MAP_PRIVATE | libc::MAP_NORESERVE,
+                -1,
+                0,
+            )
+        };
+        if guard_addr == libc::MAP_FAILED {
+            return Err(MmapRegionError::Mmap(IoError::last_os_error()));
         }
-        None => (-1, 0),
-    };
 
-    let region_start_addr = guard_addr as usize + page_size * GUARD_PAGE_COUNT;
+        let region_start_addr = guard_addr as usize + page_size * GUARD_PAGE_COUNT; 
 
-    // Inside the protected range, starting with guard_addr + PAGE_SIZE,
-    // map the requested range with received protection and flags
-    // SAFETY: Safe because the parameters are valid.
-    let region_addr = unsafe {
-        libc::mmap(
-            region_start_addr as *mut libc::c_void,
-            size,
-            prot,
-            flags | libc::MAP_FIXED,
-            fd,
-            libc::off_t::try_from(offset).unwrap(),
-        )
-    };
+        // Restore memory. 
+        let ret = unsafe {
+            let c_string = std::ffi::CString::new("/home/nikita/snap/snap.diff").unwrap();
+            RestorePartitions(c_string.as_ptr(), region_start_addr as u64, size as u64)
+        };
+        if ret == 0 {
+            println!("Snapshot restored.");
+        } else {
+            println!("Failed to restore snapshot.");
+        }
 
-    if region_addr == libc::MAP_FAILED {
-        return Err(MmapRegionError::Mmap(IoError::last_os_error()));
-    }
+        let bitmap = match track_dirty_pages {
+            true => Some(AtomicBitmap::with_len(size)),
+            false => None,
+        };
 
-    let bitmap = match track_dirty_pages {
-        true => Some(AtomicBitmap::with_len(size)),
-        false => None,
-    };
+        let STOP = START.elapsed();
+        println!("Memory restoration total, took {:?}", STOP);
+    
+        // SAFETY: Safe because the parameters are valid.
+        unsafe {
+            MmapRegionBuilder::new_with_bitmap(size, bitmap)
+                .with_raw_mmap_pointer(region_start_addr as *mut u8)
+                .with_mmap_prot(prot)
+                .with_mmap_flags(flags)
+                .build()
+        }
+    } else if restoration_phase && (do_reap_recording || do_reap_restore) {
+        // Map the guarded range to PROT_NONE
+        // SAFETY: Safe because the parameters are valid.
+        let guard_addr = unsafe {
+            libc::mmap(
+                std::ptr::null_mut(),
+                guarded_size,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_ANONYMOUS | libc::MAP_PRIVATE | libc::MAP_NORESERVE,
+                -1,
+                0,
+            )
+        };
 
-    // SAFETY: Safe because the parameters are valid.
-    unsafe {
-        MmapRegionBuilder::new_with_bitmap(size, bitmap)
-            .with_raw_mmap_pointer(region_addr.cast::<u8>())
-            .with_mmap_prot(prot)
-            .with_mmap_flags(flags)
-            .build()
+        if guard_addr == libc::MAP_FAILED {
+            return Err(MmapRegionError::Mmap(IoError::last_os_error()));
+        }
+
+        let region_start_addr = guard_addr as usize + page_size * GUARD_PAGE_COUNT;
+ 
+        if do_reap_recording {
+            let ret = unsafe {
+                let c_string = std::ffi::CString::new("/fccd/snapshots/myrev-4/mem_file").unwrap();
+                let c_string_ws = std::ffi::CString::new("/home/nikita/snap/snap.ws").unwrap();
+                InitReapRecorder(region_start_addr as u64, size as u64, c_string.as_ptr(), c_string_ws.as_ptr())
+            };
+            if ret == 0 {
+                println!("REAP recorder is initialized.");
+            } else {
+                println!("Failed to init REAP recorder.");
+            }
+        }
+        if do_reap_restore {
+            let ret = unsafe {
+                let c_string = std::ffi::CString::new("/fccd/snapshots/myrev-4/mem_file").unwrap();
+                let c_string_ws = std::ffi::CString::new("/home/nikita/snap/snap.ws").unwrap();
+                RestoreReapSnapshot(region_start_addr as u64, size as u64, c_string.as_ptr(), c_string_ws.as_ptr())
+            };
+            if ret == 0 {
+                println!("REAP restored.");
+            } else {
+                println!("Failed to restore REAP.");
+            }
+        }
+
+        let bitmap = match track_dirty_pages {
+            true => Some(AtomicBitmap::with_len(size)),
+            false => None,
+        };
+
+        // SAFETY: Safe because the parameters are valid.
+        unsafe {
+            MmapRegionBuilder::new_with_bitmap(size, bitmap)
+                .with_raw_mmap_pointer(region_start_addr as *mut u8)
+                .with_mmap_prot(prot)
+                .with_mmap_flags(flags)
+                .build()
+        }
+    } else {
+        // Map the guarded range to PROT_NONE
+        // SAFETY: Safe because the parameters are valid.
+        let guard_addr = unsafe {
+            libc::mmap(
+                std::ptr::null_mut(),
+                guarded_size,
+                libc::PROT_NONE,
+                libc::MAP_ANONYMOUS | libc::MAP_PRIVATE | libc::MAP_NORESERVE,
+                -1,
+                0,
+            )
+        };
+
+        if guard_addr == libc::MAP_FAILED {
+            return Err(MmapRegionError::Mmap(IoError::last_os_error()));
+        }
+
+        let (fd, offset) = match maybe_file_offset {
+            Some(ref file_offset) => {
+                check_file_offset(file_offset, size)?;
+                (file_offset.file().as_raw_fd(), file_offset.start())
+            }
+            None => (-1, 0),
+        };
+
+        let region_start_addr = guard_addr as usize + page_size * GUARD_PAGE_COUNT;
+
+        // Inside the protected range, starting with guard_addr + PAGE_SIZE,
+        // map the requested range with received protection and flags
+        // SAFETY: Safe because the parameters are valid.
+        let region_addr = unsafe {
+            libc::mmap(
+                region_start_addr as *mut libc::c_void,
+                size,
+                prot,
+                flags | libc::MAP_FIXED,
+                fd,
+                libc::off_t::try_from(offset).unwrap(),
+            )
+        };
+
+        if region_addr == libc::MAP_FAILED {
+            return Err(MmapRegionError::Mmap(IoError::last_os_error()));
+        }
+
+        let bitmap = match track_dirty_pages {
+            true => Some(AtomicBitmap::with_len(size)),
+            false => None,
+        };
+
+        // SAFETY: Safe because the parameters are valid.
+        unsafe {
+            MmapRegionBuilder::new_with_bitmap(size, bitmap)
+                .with_raw_mmap_pointer(region_addr.cast::<u8>())
+                .with_mmap_prot(prot)
+                .with_mmap_flags(flags)
+                .build()
+        }
     }
 }
 
@@ -113,6 +235,7 @@ fn build_guarded_region(
 pub fn create_guest_memory(
     regions: &[(Option<FileOffset>, GuestAddress, usize)],
     track_dirty_pages: bool,
+    from_compressed: bool
 ) -> std::result::Result<GuestMemoryMmap, Error> {
     let prot = libc::PROT_READ | libc::PROT_WRITE;
     let mut mmap_regions = Vec::with_capacity(regions.len());
@@ -124,7 +247,7 @@ pub fn create_guest_memory(
         };
 
         let mmap_region =
-            build_guarded_region(region.0.clone(), region.2, prot, flags, track_dirty_pages)
+            build_guarded_region(region.0.clone(), region.2, prot, flags, track_dirty_pages, from_compressed)
                 .map_err(Error::MmapRegion)?;
 
         mmap_regions.push(GuestRegionMmap::new(mmap_region, region.1)?);
@@ -441,7 +564,7 @@ pub mod test_utils {
     ) -> std::result::Result<GuestMemoryMmap, Error> {
         create_guest_memory(
             &regions.iter().map(|r| (None, r.0, r.1)).collect::<Vec<_>>(),
-            track_dirty_pages,
+            track_dirty_pages, false,
         )
     }
 }
@@ -560,7 +683,7 @@ mod tests {
             let prot = libc::PROT_READ | libc::PROT_WRITE;
             let flags = libc::MAP_ANONYMOUS | libc::MAP_NORESERVE | libc::MAP_PRIVATE;
 
-            let region = build_guarded_region(None, size, prot, flags, false).unwrap();
+            let region = build_guarded_region(None, size, prot, flags, false, false).unwrap();
 
             // Verify that the region was built correctly
             assert_eq!(region.size(), size);
@@ -588,6 +711,7 @@ mod tests {
                 prot,
                 flags,
                 false,
+                false,
             )
             .unwrap();
 
@@ -613,7 +737,7 @@ mod tests {
                 (None, GuestAddress(0x30000), region_size),
             ];
 
-            let guest_memory = create_guest_memory(&regions, false).unwrap();
+            let guest_memory = create_guest_memory(&regions, false, false).unwrap();
             guest_memory.iter().for_each(|region| {
                 validate_guard_region(region);
                 loop_guard_region_to_sigsegv(region);
@@ -630,7 +754,7 @@ mod tests {
                 (None, GuestAddress(0x30000), region_size),
             ];
 
-            let guest_memory = create_guest_memory(&regions, false).unwrap();
+            let guest_memory = create_guest_memory(&regions, false, false).unwrap();
             guest_memory.iter().for_each(|region| {
                 assert!(region.bitmap().is_none());
             });
@@ -646,7 +770,7 @@ mod tests {
                 (None, GuestAddress(0x30000), region_size),
             ];
 
-            let guest_memory = create_guest_memory(&regions, true).unwrap();
+            let guest_memory = create_guest_memory(&regions, true, false).unwrap();
             guest_memory.iter().for_each(|region| {
                 assert!(region.bitmap().is_some());
             });
@@ -663,7 +787,7 @@ mod tests {
             (None, GuestAddress(region_size as u64), region_size), // pages 3-5
             (None, GuestAddress(region_size as u64 * 2), region_size), // pages 6-8
         ];
-        let guest_memory = create_guest_memory(&regions, true).unwrap();
+        let guest_memory = create_guest_memory(&regions, true, false).unwrap();
 
         let dirty_map = [
             // page 0: not dirty

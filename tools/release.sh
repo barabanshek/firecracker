@@ -95,6 +95,17 @@ EOF
   esac
 done
 
+# Build compression library.
+export QPL_PATH=/usr/local/qpl
+cd iaa_qpl_compress
+mkdir -p build; cd build
+cmake ..
+make -j
+export IAA_COMPRESS_PATH=$(pwd)
+cd ../..
+
+# Export environment for the rust FFI.
+export RUSTFLAGS="-L ${IAA_COMPRESS_PATH} -L ${QPL_PATH}/lib -lstdc++ -lqpl -lmemory_restorator -lmemory_restorator-c -lglog"
 
 ARCH=$(uname -m)
 VERSION=$(get-firecracker-version)
