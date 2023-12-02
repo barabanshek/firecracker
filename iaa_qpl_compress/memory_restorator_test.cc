@@ -172,11 +172,9 @@ TEST_F( MemoryRestoratorTest, RandomPartitions) {
 
     makeAndRestoreSnapshot(memory_restorator_scattered_dynamic, memory,
                            restored_memory_buffer, mem_size);
-    makeAndRestoreSnapshot(memory_restorator_scattered_dynamic, memory,
+    makeAndRestoreSnapshot(memory_restorator_scattered_static, memory,
                            restored_memory_buffer, mem_size);
-    makeAndRestoreSnapshot(memory_restorator_scattered_dynamic, memory,
+    makeAndRestoreSnapshot(memory_restorator_single_uffdiocopy, memory,
                            restored_memory_buffer, mem_size);
-
-
 }
 
