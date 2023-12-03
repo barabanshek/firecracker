@@ -115,7 +115,6 @@ acc::MemoryRestorator* MemoryRestoratorTest::memory_restorator_scattered_static 
 acc::MemoryRestorator* MemoryRestoratorTest::memory_restorator_single_uffdiocopy = nullptr; 
 
 
-// Demonstrate some basic assertions.
 TEST_F( MemoryRestoratorTest, RandomPartitions) {
     std::mt19937 gen{123};
     // Create memory partitions.
@@ -178,3 +177,86 @@ TEST_F( MemoryRestoratorTest, RandomPartitions) {
                            restored_memory_buffer, mem_size);
 }
 
+TEST_F( MemoryRestoratorTest, SparsePartitions) {
+
+    size_t mem_size = 256 * utils::kMB;
+    auto memory_buffer = utils::malloc_allocate(mem_size);
+    auto true_entropy =
+        init_rand_memory(memory_buffer.get(), mem_size, 100);
+
+    size_t num_pages = std::ceil(mem_size / sys::kPageSize);
+
+    static acc::MemoryRestorator::MemoryPartitions memory;
+    for (int page_num = 0; page_num < num_pages; page_num++) {
+        if ( page_num%10000 == 0) {
+            auto p_ptr = memory_buffer.get() + page_num * sys::kPageSize;
+            memory.push_back(std::make_tuple(p_ptr, sys::kPageSize));
+        }
+    }
+    
+    auto restored_memory_buffer =
+        std::unique_ptr<uint8_t, utils::MMapDeleter>(nullptr);
+
+    makeAndRestoreSnapshot(memory_restorator_scattered_dynamic, memory,
+                           restored_memory_buffer, mem_size);
+    makeAndRestoreSnapshot(memory_restorator_scattered_static, memory,
+                           restored_memory_buffer, mem_size);
+    makeAndRestoreSnapshot(memory_restorator_single_uffdiocopy, memory,
+                           restored_memory_buffer, mem_size);
+}
+
+TEST_F( MemoryRestoratorTest, EveryOtherPage) {
+
+    size_t mem_size = 256 * utils::kMB;
+    auto memory_buffer = utils::malloc_allocate(mem_size);
+    auto true_entropy =
+        init_rand_memory(memory_buffer.get(), mem_size, 100);
+
+    size_t num_pages = std::ceil(mem_size / sys::kPageSize);
+
+    static acc::MemoryRestorator::MemoryPartitions memory;
+    for (int page_num = 0; page_num < num_pages; page_num++) {
+        if ( page_num%2 == 0) {
+            auto p_ptr = memory_buffer.get() + page_num * sys::kPageSize;
+            memory.push_back(std::make_tuple(p_ptr, sys::kPageSize));
+        }
+    }
+    
+    auto restored_memory_buffer =
+        std::unique_ptr<uint8_t, utils::MMapDeleter>(nullptr);
+
+    makeAndRestoreSnapshot(memory_restorator_scattered_dynamic, memory,
+                           restored_memory_buffer, mem_size);
+    makeAndRestoreSnapshot(memory_restorator_scattered_static, memory,
+                           restored_memory_buffer, mem_size);
+    makeAndRestoreSnapshot(memory_restorator_single_uffdiocopy, memory,
+                           restored_memory_buffer, mem_size);
+}
+
+TEST_F( MemoryRestoratorTest, FirstPartitionWithNonZeroOffset) {
+
+    size_t mem_size = 256 * utils::kMB;
+    auto memory_buffer = utils::malloc_allocate(mem_size);
+    auto true_entropy =
+        init_rand_memory(memory_buffer.get(), mem_size, 100);
+
+    size_t num_pages = std::ceil(mem_size / sys::kPageSize);
+
+    static acc::MemoryRestorator::MemoryPartitions memory;
+    for (int page_num = 0; page_num < num_pages; page_num++) {
+        if ( page_num%2 == 1) {
+            auto p_ptr = memory_buffer.get() + page_num * sys::kPageSize;
+            memory.push_back(std::make_tuple(p_ptr, sys::kPageSize));
+        }
+    }
+    
+    auto restored_memory_buffer =
+        std::unique_ptr<uint8_t, utils::MMapDeleter>(nullptr);
+
+    makeAndRestoreSnapshot(memory_restorator_scattered_dynamic, memory,
+                           restored_memory_buffer, mem_size);
+    makeAndRestoreSnapshot(memory_restorator_scattered_static, memory,
+                           restored_memory_buffer, mem_size);
+    makeAndRestoreSnapshot(memory_restorator_single_uffdiocopy, memory,
+                           restored_memory_buffer, mem_size);
+}
