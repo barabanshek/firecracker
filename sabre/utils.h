@@ -104,6 +104,8 @@ mmap_allocate(size_t size, int fd = -1, bool huge_pages = false,
   return unique_ptr;
 }
 
+#define mmap_nullptr std::unique_ptr<uint8_t, utils::MMapDeleter>(nullptr)
+
 static std::unique_ptr<uint8_t, MallocDeleter>
 malloc_allocate(size_t size, bool prefault = false) {
   auto ptr = std::unique_ptr<uint8_t, MallocDeleter>(
@@ -112,6 +114,8 @@ malloc_allocate(size_t size, bool prefault = false) {
     std::memset(ptr.get(), 1, size);
   return ptr;
 }
+
+#define malloc_nullptr std::unique_ptr<uint8_t, utils::MallocDeleter>(nullptr)
 
 static std::unique_ptr<uint8_t, MMapDeleter> shem_allocate(size_t size,
                                                            int *fd) {

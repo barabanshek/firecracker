@@ -26,7 +26,18 @@ DEFINE_uint64(mem_entropy, 100, "Entropy of generated memory.");
 DEFINE_uint64(partition_n, 16, "Number of partitions in source.");
 DEFINE_uint64(partition_seed, 123, "Seed in rng for partitioning.");
 DEFINE_string(snapshot_filename, "mysnapshot", "Where to write snapshot data.");
+DEFINE_bool(passthrough, false, "If passthrough - don't do compression.");
 
+// A demo application showcasing memory restoration:
+//   * creates a set of scattered memory regions;
+//   * initializes them with random content;
+//   * makes a snapshot and writes to disk;
+//   * drops caches;
+//   * restores the memory from the snapshot;
+//   * measures time.
+//
+// Users can try different synthetic snapshots and memory restoration
+// configurations.
 int main(int argc, char **argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
@@ -101,7 +112,9 @@ int main(int argc, char **argv) {
   acc::MemoryRestorator::MemoryRestoratotConfig cfg = {
       .execution_path = qpl_path_hardware,
       .partition_hanlding_path =
-          acc::MemoryRestorator::kHandleAsScatteredPartitions,
+          FLAGS_passthrough
+              ? acc::MemoryRestorator::kHandleAsSinglePartition
+              : acc::MemoryRestorator::kHandleAsScatteredPartitions,
       .scattered_partition_handling_path =
           acc::MemoryRestorator::kDoDynamicHuffmanForScatteredPartitions,
       .sigle_partition_handling_path =
@@ -110,7 +123,7 @@ int main(int argc, char **argv) {
                                    ? acc::MemoryRestorator::kUserApplication
                                    : acc::MemoryRestorator::kMemoryRestorator,
       .max_hardware_jobs = 1,
-      .passthrough = false};
+      .passthrough = FLAGS_passthrough};
 
   acc::MemoryRestorator memory_restorator(cfg, FLAGS_snapshot_filename.c_str(),
                                           FLAGS_use_mempool ? &mem_pool
@@ -130,8 +143,7 @@ int main(int argc, char **argv) {
     }
   }
 
-  auto restored_memory_buffer =
-      std::unique_ptr<uint8_t, utils::MMapDeleter>(nullptr);
+  auto restored_memory_buffer = mmap_nullptr;
   if (FLAGS_memory_owner == 1)
     restored_memory_buffer = utils::mmap_allocate(mem_size);
 
