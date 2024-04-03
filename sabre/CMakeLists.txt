@@ -15,9 +15,6 @@ add_definitions(-D_FORTIFY_SOURCE=2)
 # Stuff.
 find_package (gflags REQUIRED)
 
-#
-# add_compile_definitions(_QPL_SOFTWARE_)
-
 # C++ library
 add_library(memory_restorator memory_restorator.cc reap_recorder.cc)
 target_include_directories(memory_restorator PUBLIC $ENV{QPL_HOME}/include/)

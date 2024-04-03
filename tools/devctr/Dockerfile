@@ -84,7 +84,7 @@ RUN curl https://www.nasm.us/pub/nasm/releasebuilds/2.16.01/nasm-2.16.01.tar.gz 
 RUN git clone --recursive https://github.com/intel/qpl.git && cd qpl && \
     git checkout $QPL_COMMIT_TO_USE && \
     mkdir build && cd build && \
-    cmake -DCMAKE_INSTALL_PREFIX="${QPL_HOME}" .. && \
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${QPL_HOME}" .. && \
     make -j && make install
 
 # Install Google benchmark.
