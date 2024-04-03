@@ -26,4 +26,9 @@ tools/devtool build_devctr
 ```
 
 
-## Running Sabre microbenchmark
+## Running Sabre demo
+```
+sudo ./build/sabre/memory_restorator_demo
+```
+
+## Running the microbenchmark
