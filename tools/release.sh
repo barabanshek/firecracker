@@ -95,17 +95,19 @@ EOF
   esac
 done
 
-# Build compression library.
-export QPL_PATH=/usr/local/qpl
-cd iaa_qpl_compress
-mkdir -p build; cd build
-cmake ..
+# Build Sabre setup.
+SABRE_SOURCE_DIR="$(pwd)/sabre/"
+SABRE_BUILD_DIR="$(pwd)/build/sabre/"
+mkdir -pv "${SABRE_BUILD_DIR}"
+
+# Build.
+pushd ${SABRE_BUILD_DIR}
+cmake ${SABRE_SOURCE_DIR}
 make -j
-export IAA_COMPRESS_PATH=$(pwd)
-cd ../..
+popd
 
 # Export environment for the rust FFI.
-export RUSTFLAGS="-L ${IAA_COMPRESS_PATH} -L ${QPL_PATH}/lib -lstdc++ -lqpl -lmemory_restorator -lmemory_restorator-c -lglog"
+export RUSTFLAGS="-L ${SABRE_BUILD_DIR} -L ${QPL_HOME}/lib -lstdc++ -lqpl -lmemory_restorator -lmemory_restorator-c -lglog"
 
 ARCH=$(uname -m)
 VERSION=$(get-firecracker-version)

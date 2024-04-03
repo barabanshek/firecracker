@@ -4,7 +4,7 @@ FROM ubuntu:22.04
 # The Rust toolchain layer will get updated most frequently, but we could keep the system
 # dependencies layer intact for much longer.
 
-ARG RUST_TOOLCHAIN="1.70.0"
+ARG RUST_TOOLCHAIN="1.76.0"
 ARG TMP_BUILD_DIR=/tmp/build
 ARG FIRECRACKER_SRC_DIR="/firecracker"
 ARG FIRECRACKER_BUILD_DIR="$FIRECRACKER_SRC_DIR/build"
@@ -18,7 +18,9 @@ ENV RUSTUP_HOME=/usr/local/rust
 ENV PATH="$PATH:$CARGO_HOME/bin"
 ENV LC_ALL=C.UTF-8
 
-ENV QPL_COMMIT_TO_USE="3c21a13e43bd668be2bfc4a88c0a66a50e0b14cd"
+# QPL related
+ARG QPL_COMMIT_TO_USE="3c21a13e43bd668be2bfc4a88c0a66a50e0b14cd"
+ENV QPL_HOME=/usr/local/qpl
 
 # Install system dependencies
 #
@@ -82,7 +84,7 @@ RUN curl https://www.nasm.us/pub/nasm/releasebuilds/2.16.01/nasm-2.16.01.tar.gz 
 RUN git clone --recursive https://github.com/intel/qpl.git && cd qpl && \
     git checkout $QPL_COMMIT_TO_USE && \
     mkdir build && cd build && \
-    cmake -DCMAKE_INSTALL_PREFIX=/usr/local/qpl .. && \
+    cmake -DCMAKE_INSTALL_PREFIX="${QPL_HOME}" .. && \
     make -j && make install
 
 # Install Google benchmark.

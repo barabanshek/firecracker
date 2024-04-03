@@ -21,8 +21,8 @@ find_package (gflags REQUIRED)
 
 # C++ library
 add_library(memory_restorator memory_restorator.cc reap_recorder.cc)
-target_include_directories(memory_restorator PUBLIC $ENV{QPL_PATH}/include/)
-target_link_directories(memory_restorator PUBLIC $ENV{QPL_PATH}/lib)
+target_include_directories(memory_restorator PUBLIC $ENV{QPL_HOME}/include/)
+target_link_directories(memory_restorator PUBLIC $ENV{QPL_HOME}/lib)
 target_link_libraries(memory_restorator qpl dl glog gflags)
 
 # C library
