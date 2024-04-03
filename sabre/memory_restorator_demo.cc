@@ -14,7 +14,7 @@ namespace logging {
 static constexpr int _g_log_severity_ = LOG_INFO;
 }
 
-//
+// Flags.
 DEFINE_bool(use_mempool, false,
             "Use mempool for decompression buffers or not.");
 DEFINE_bool(memory_owner, true,
@@ -115,10 +115,10 @@ int main(int argc, char **argv) {
           FLAGS_passthrough
               ? acc::MemoryRestorator::kHandleAsSinglePartition
               : acc::MemoryRestorator::kHandleAsScatteredPartitions,
-      .scattered_partition_handling_path =
-          acc::MemoryRestorator::kDoDynamicHuffmanForScatteredPartitions,
       .sigle_partition_handling_path =
           acc::MemoryRestorator::kHandleWithUffdioCopy,
+      .scattered_partition_handling_path =
+          acc::MemoryRestorator::kDoDynamicHuffmanForScatteredPartitions,
       .restored_memory_owner = FLAGS_memory_owner == true
                                    ? acc::MemoryRestorator::kUserApplication
                                    : acc::MemoryRestorator::kMemoryRestorator,
