@@ -18,7 +18,7 @@ static constexpr int _g_log_severity_ = LOG_INFO;
 DEFINE_bool(use_mempool, false,
             "Use mempool for decompression buffers or not.");
 DEFINE_bool(memory_owner, true,
-            "Who owns memory: 0 - memory_restorator, 1 - application.");
+            "Who owns memory: false - memory_restorator, true - application.");
 DEFINE_bool(drop_caches, true, "Drop cache flag.");
 DEFINE_uint64(mem_size, 256 * utils::kMB,
               "Size of memory to compress (in Bytes).");
