@@ -3,13 +3,15 @@
 #include "memory_restorator.h"
 #include "reap_recorder.h"
 
-#include <glog/logging.h>
+#include "simple_logging.h"
 
 extern "C" {
 
-void rust_ffi_test(uint32_t data) {
-  RLOG(1) << "Hi from Rust: " << data << std::endl;
+namespace logging {
+static constexpr int _g_log_severity_ = LOG_INFO;
 }
+
+void rust_ffi_test(uint32_t data) { RLOG(1) << "Hi from Rust: " << data; }
 
 // Static state objects; these objects are used to represent certain state
 // required for memroy restoration inside the Rust environment of the
@@ -54,7 +56,7 @@ void AddPartition(uint64_t p_addr, uint64_t p_size) {
   _sPartitions.push_back(
       std::make_tuple(reinterpret_cast<uint8_t *>(p_addr), p_size));
   RLOG(1) << "Partition added: " << std::hex << p_addr << ", " << std::dec
-          << p_size << std::endl;
+          << p_size;
 }
 
 // Snapshot partitions currently exsiting in _sPartitions into a file.
@@ -65,23 +67,23 @@ uint8_t SnapshotPartitions(const char *snapshot_filename, uint64_t base_addr) {
   acc::MemoryRestorator memory_restorator(acc::MemoryRestorator::default_cfg,
                                           snapshot_filename);
   if (memory_restorator.Init()) {
-    RLOG(0) << "Failed to init QPL." << std::endl;
+    RLOG(0) << "Failed to init QPL.";
     return 1;
   }
 
   // TODO(Nikita): it's not 0 but rather the base address coming from
   // firecracker.
   if (memory_restorator.MakeSnapshot(_sPartitions, base_addr)) {
-    RLOG(0) << "Failed to make snapshot." << std::endl;
+    RLOG(0) << "Failed to make snapshot.";
     return 1;
   }
 
   if (memory_restorator.DropCaches()) {
-    RLOG(0) << "Failed to drop caches." << std::endl;
+    RLOG(0) << "Failed to drop caches.";
     return 1;
   }
 
-  RLOG(0) << "Snapshot created, and its page cache is dropped." << std::endl;
+  RLOG(0) << "Snapshot created, and its page cache is dropped.";
   return 0;
 }
 
@@ -97,14 +99,14 @@ uint8_t RestorePartitions(const char *snapshot_filename, uint64_t m_addr,
       _sRestoratorMemoryPool.IsInitialized() ? &_sRestoratorMemoryPool
                                              : nullptr);
   if (memory_restorator.Init()) {
-    RLOG(0) << "Failed to init QPL." << std::endl;
+    RLOG(0) << "Failed to init QPL.";
     return 1;
   }
 
   std::unique_ptr<uint8_t, utils::MMapDeleter> mem_region;
   mem_region.reset(reinterpret_cast<uint8_t *>(m_addr));
   if (memory_restorator.RestoreFromSnapshot(mem_region, m_size)) {
-    RLOG(0) << "Failed to restore memory." << std::endl;
+    RLOG(0) << "Failed to restore memory.";
     return 1;
   }
 
@@ -117,12 +119,11 @@ uint8_t InitReapRecorder(uint64_t r_addr, uint64_t r_size,
                          const char *ws_filename) {
   if (_sReapRecorder.StartListening(reinterpret_cast<uint8_t *>(r_addr), r_size,
                                     snapshot_filename, ws_filename)) {
-    RLOG(0) << "Failed to init reap recorder." << std::endl;
+    RLOG(0) << "Failed to init reap recorder.";
     return 1;
   }
   RLOG(1) << "Reap recorder is initialized: underlying snapshot file: "
-          << snapshot_filename << ", output ws file: " << ws_filename
-          << std::endl;
+          << snapshot_filename << ", output ws file: " << ws_filename;
   return 0;
 }
 
@@ -131,7 +132,7 @@ uint8_t RestoreReapSnapshot(uint64_t r_addr, uint64_t r_size,
                             const char *ws_filename) {
   if (_sReapRecorder.Restore(reinterpret_cast<uint8_t *>(r_addr), r_size,
                              snapshot_filename, ws_filename)) {
-    RLOG(0) << "Failed to restore reap snapshot." << std::endl;
+    RLOG(0) << "Failed to restore reap snapshot.";
     return 1;
   }
   return 0;

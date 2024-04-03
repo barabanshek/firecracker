@@ -20,7 +20,10 @@ git fetch origin sabre; git checkout sabre
 tools/devtool build --release --libc gnu
 ```
 
-To build the development container, execute:
+To build your own development container, execute:
 ```
 tools/devtool build_devctr
 ```
+
+
+## Running Sabre microbenchmark

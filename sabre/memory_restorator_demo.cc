@@ -5,10 +5,14 @@
 #include <gflags/gflags.h>
 
 #include "memory_restorator.h"
+#include "simple_logging.h"
 #include "test_utils.h"
 #include "utils.h"
 
-#include <iostream>
+// Init logging infra.
+namespace logging {
+static constexpr int _g_log_severity_ = LOG_INFO;
+}
 
 //
 DEFINE_bool(use_mempool, false,
@@ -35,8 +39,7 @@ int main(int argc, char **argv) {
   auto memory_buffer = utils::malloc_allocate(mem_size);
   auto true_entropy =
       init_rand_memory(memory_buffer.get(), mem_size, FLAGS_mem_entropy);
-  RLOG(1) << "Memory generated with true entropy: " << true_entropy
-          << std::endl;
+  RLOG(LOG_INFO) << "Memory generated with true entropy: " << true_entropy;
 
   acc::MemoryRestorator::MemoryPartitions memory_gen;
   std::uniform_int_distribution<size_t> generator_uniform(1, mem_size - 1);
@@ -81,9 +84,9 @@ int main(int argc, char **argv) {
   }
 
   // Dump memory partitions.
-  RLOG(2) << "partitions created: " << std::endl;
+  RLOG(LOG_VERBAL) << "partitions created: ";
   for (auto const &[p_ptr, p_size] : memory) {
-    RLOG(2) << "    " << (void *)(p_ptr) << ": " << p_size << std::endl;
+    RLOG(LOG_VERBAL) << "    " << (void *)(p_ptr) << ": " << p_size;
   }
 
   // Allocate mempool.
@@ -113,17 +116,17 @@ int main(int argc, char **argv) {
                                           FLAGS_use_mempool ? &mem_pool
                                                             : nullptr);
   if (memory_restorator.Init()) {
-    RLOG(0) << "Failed to init QPL." << std::endl;
+    RLOG(LOG_ERROR) << "Failed to init QPL.";
   }
   if (memory_restorator.MakeSnapshot(
           memory, reinterpret_cast<uint64_t>(std::get<0>(memory.front())))) {
-    RLOG(0) << "Failed to make snapshot." << std::endl;
+    RLOG(LOG_ERROR) << "Failed to make snapshot.";
   }
 
   // Drop caches.
   if (FLAGS_drop_caches) {
     if (memory_restorator.DropCaches()) {
-      RLOG(0) << "Failed to drop caches." << std::endl;
+      RLOG(LOG_ERROR) << "Failed to drop caches.";
     }
   }
 
@@ -134,7 +137,7 @@ int main(int argc, char **argv) {
 
   if (memory_restorator.RestoreFromSnapshot(restored_memory_buffer, mem_size,
                                             nullptr)) {
-    RLOG(0) << "Failed to restore memory." << std::endl;
+    RLOG(LOG_ERROR) << "Failed to restore memory.";
     return -1;
   }
 
@@ -147,11 +150,11 @@ int main(int argc, char **argv) {
                    (reinterpret_cast<uint64_t>(p_ptr) -
                     reinterpret_cast<uint64_t>(p_ptr_begin)),
                p_size)) {
-      RLOG(0) << "Data missmatch in partition: " << i << std::endl;
+      RLOG(LOG_ERROR) << "Data missmatch in partition: " << i;
     }
     ++i;
   }
 
-  RLOG(1) << "All good!" << std::endl;
+  RLOG(LOG_INFO) << "All good!";
   return 0;
 }

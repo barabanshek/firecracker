@@ -3,10 +3,11 @@
 
 #include <chrono>
 #include <cstring>
-#include <iostream>
 #include <memory>
+#include <string>
 
 #include <fcntl.h>
+#include <stdlib.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -49,31 +50,6 @@ private:
   std::chrono::time_point<std::chrono::high_resolution_clock> start_tick_;
   std::chrono::time_point<std::chrono::high_resolution_clock> last_tick_;
 };
-
-// Our own simple logging as glog + Rust is complicated.
-class Logger {
-public:
-  static constexpr int kMaxSeverity = 1;
-
-  Logger(int severity) : severity_(severity) {}
-
-  template <typename T> Logger &operator<<(const T &val) {
-    if (severity_ <= kMaxSeverity)
-      std::cout << val;
-    return *this;
-  }
-
-  Logger &operator<<(std::ostream &(*manipulator)(std::ostream &)) {
-    if (severity_ <= kMaxSeverity)
-      std::cout << manipulator;
-    return *this;
-  }
-
-private:
-  int severity_;
-};
-
-#define RLOG(x) utils::Logger(x)
 
 //
 /// Memory allocators.

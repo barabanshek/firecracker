@@ -9,10 +9,14 @@
 #include <sys/mman.h>
 
 #include <benchmark/benchmark.h>
-#include <glog/logging.h>
 
 #include "memory_restorator.h"
+#include "simple_logging.h"
 #include "utils.h"
+
+namespace logging {
+static constexpr int _g_log_severity_ = LOG_INFO;
+}
 
 typedef std::map<std::string, std::tuple<size_t, uint8_t *>> CompressionDataset;
 
@@ -23,24 +27,25 @@ static std::map<size_t,
 static CompressionDataset load_corpus_dataset(const char *dataset_path) {
   assert(std::filesystem::exists(dataset_path) &&
          std::filesystem::is_directory(dataset_path));
-  LOG(INFO) << "Loading dataset from " << dataset_path;
+  RLOG(LOG_INFO) << "Loading dataset from " << dataset_path;
   CompressionDataset dataset;
   for (const auto &entry : std::filesystem::directory_iterator(dataset_path)) {
     std::string filename_ = entry.path().filename();
     std::string filename = std::string(dataset_path) + "/" + filename_;
     int fd = open(filename.c_str(), O_RDONLY);
     if (fd == -1)
-      LOG(FATAL) << "failed to open benchmark file " << filename << ", "
-                 << strerror(errno);
+      RLOG(LOG_ERROR) << "failed to open benchmark file " << filename << ", "
+                      << strerror(errno);
     size_t fd_size = static_cast<size_t>(lseek(fd, 0L, SEEK_END));
     lseek(fd, 0L, SEEK_SET);
-    LOG(INFO) << "Found file: " << filename << " of size: " << fd_size << " B";
+    RLOG(LOG_INFO) << "Found file: " << filename << " of size: " << fd_size
+                   << " B";
     uint8_t *mem = reinterpret_cast<uint8_t *>(malloc(fd_size));
     if (read(fd, mem, fd_size) != fd_size)
-      LOG(FATAL) << "Failed to read benchmark file " << filename;
+      RLOG(LOG_ERROR) << "Failed to read benchmark file " << filename;
     dataset[filename_] = std::make_tuple(fd_size, mem);
   }
-  LOG(INFO) << "Dataset with " << dataset.size() << " files is loaded";
+  RLOG(LOG_INFO) << "Dataset with " << dataset.size() << " files is loaded";
   return dataset;
 }
 
@@ -52,11 +57,10 @@ void make_datasets(const char *dataset_prefix, const char *dataset_name,
 
   // Cut dataset to produce sub-datasets.
   size_t n_of_pages = std::ceil(mem_size / sys::kPageSize);
-  LOG(INFO) << "Using dataset: " << dataset_name << ", @" << std::hex
-            << (void *)(source_buff) << ": " << std::dec << n_of_pages
-            << std::endl;
+  RLOG(LOG_INFO) << "Using dataset: " << dataset_name << ", @" << std::hex
+                 << (void *)(source_buff) << ": " << std::dec << n_of_pages;
   for (auto const &sparsity : sparsities) {
-    LOG(INFO) << "Making dataset of sparsity #" << sparsity << std::endl;
+    RLOG(LOG_INFO) << "Making dataset of sparsity #" << sparsity;
 
     acc::MemoryRestorator::MemoryPartitions dataset_partitions;
     size_t dataset_size = mem_size * 2;
