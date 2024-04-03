@@ -235,9 +235,9 @@ int MemoryRestorator::MakeSnapshot(
   for (auto const &[p_ptr, p_size] : src_memory_partitions)
     src_total_size += p_size;
 
-  auto src = utils::malloc_allocate(src_total_size);
+  auto src = utils::m_malloc::allocate(src_total_size);
   std::vector<size_t> dst_partition_sizes;
-  auto dst = utils::malloc_allocate(src_total_size);
+  auto dst = utils::m_malloc::allocate(src_total_size);
   if (src.get() == nullptr || dst.get() == nullptr) {
     RLOG(0) << "Failed to allocate memory.";
     return -1;
@@ -397,12 +397,12 @@ void MemoryRestorator::AlignMemoryPartitions(
 }
 
 int MemoryRestorator::RestoreFromSnapshot(
-    std::unique_ptr<uint8_t, utils::MMapDeleter> &mem_region,
-    size_t mem_region_size, const MemoryPartitions *original_partitions) {
+    utils::m_mmap::Memory &mem_region, size_t mem_region_size,
+    const MemoryPartitions *original_partitions) {
   // To profile, as the performance of this is the key enabler of this idea.
   utils::TimeScope time_begin;
 
-  std::unique_ptr<uint8_t, utils::MMapDeleter> dst_mem_region;
+  utils::m_mmap::Memory dst_mem_region;
   if (cfg_.restored_memory_owner == kUserApplication) {
     if (cfg_.sigle_partition_handling_path == kHandleWithUffdioContinue) {
       RLOG(0) << "Memory owned by application can not be restored with "
@@ -431,9 +431,9 @@ int MemoryRestorator::RestoreFromSnapshot(
     // Allocate destination memory.
     if (cfg_.partition_hanlding_path == kHandleAsScatteredPartitions ||
         cfg_.sigle_partition_handling_path == kHandleWithUffdioCopy)
-      dst_mem_region = utils::mmap_allocate(mem_region_size);
+      dst_mem_region = utils::m_mmap::allocate(mem_region_size);
     else
-      dst_mem_region = utils::shem_allocate(mem_region_size, &shem_fd_);
+      dst_mem_region = utils::m_mmap::shem_allocate(mem_region_size, &shem_fd_);
 
     if (dst_mem_region.get() == nullptr) {
       RLOG(0) << "Failed to allocate destination memory region.";
@@ -507,7 +507,7 @@ int MemoryRestorator::RestoreFromSnapshot(
   auto snapshot_filename = snapshot_filename_ + "." + kSnapshotFileNameSuffix;
   int snapshot_fd = -1;
   size_t snapshot_file_size = 0;
-  std::unique_ptr<uint8_t, utils::MMapDeleter> src;
+  utils::m_mmap::Memory src;
   if (!cfg_.passthrough) {
     // Here, we will do the decompression, so open and mmap without any
     // pre-faulting and/or pre-fetching.
@@ -520,7 +520,8 @@ int MemoryRestorator::RestoreFromSnapshot(
     lseek(snapshot_fd, 0L, SEEK_SET);
 
     // Mmap file.
-    src = utils::mmap_allocate(snapshot_file_size, snapshot_fd, false, false);
+    src =
+        utils::m_mmap::allocate(snapshot_file_size, snapshot_fd, false, false);
     if (src.get() == nullptr) {
       RLOG(0) << "Failed to mmap file.";
       close(snapshot_fd);
@@ -538,7 +539,7 @@ int MemoryRestorator::RestoreFromSnapshot(
     lseek(snapshot_fd, 0L, SEEK_SET);
 
     // Fetch.
-    src = utils::mmap_allocate(snapshot_file_size, -1, false, false);
+    src = utils::m_mmap::allocate(snapshot_file_size, -1, false, false);
     if (read(snapshot_fd, src.get(), snapshot_file_size) !=
         snapshot_file_size) {
       RLOG(0) << "Failed to pre-fetch snapshot file.";
@@ -560,7 +561,7 @@ int MemoryRestorator::RestoreFromSnapshot(
     bool need_to_explicitly_release_decompressed_memory =
         false; // TODO(Nikita): avoid this!
 
-    std::unique_ptr<uint8_t, utils::MMapDeleter> decompressed_memory;
+    utils::m_mmap::Memory decompressed_memory;
     MemoryPartitions memory_partitions_to_install;
     if (!cfg_.passthrough) {
       // Do decompression.
@@ -576,14 +577,14 @@ int MemoryRestorator::RestoreFromSnapshot(
         } else {
           RLOG(1) << "Allocating local private decompression buffer";
           decompressed_memory =
-              utils::mmap_allocate(total_decompress_size, -1, true, true);
+              utils::m_mmap::allocate(total_decompress_size, -1, true, true);
         }
       } else {
         // We are going to use userfaultfd's CONTINUE mode, this memory must be
         // shared with the destination buffer via shem.
         RLOG(1) << "Allocating shem backed shared decompression buffer";
         decompressed_memory =
-            utils::shem_allocate(total_decompress_size, &shem_fd_);
+            utils::m_mmap::shem_allocate(total_decompress_size, &shem_fd_);
       }
       if (decompressed_memory.get() == nullptr) {
         RLOG(0)

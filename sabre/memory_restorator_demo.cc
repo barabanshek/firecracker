@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
   // Create memory partitions.
   size_t mem_size = FLAGS_mem_size;
   size_t partition_n = FLAGS_partition_n;
-  auto memory_buffer = utils::malloc_allocate(mem_size);
+  auto memory_buffer = utils::m_malloc::allocate(mem_size);
   auto true_entropy =
       init_rand_memory(memory_buffer.get(), mem_size, FLAGS_mem_entropy);
   RLOG(LOG_INFO) << "Memory generated with true entropy: " << true_entropy;
@@ -143,9 +143,9 @@ int main(int argc, char **argv) {
     }
   }
 
-  auto restored_memory_buffer = mmap_nullptr;
+  auto restored_memory_buffer = utils::m_mmap::nil;
   if (FLAGS_memory_owner == 1)
-    restored_memory_buffer = utils::mmap_allocate(mem_size);
+    restored_memory_buffer = utils::m_mmap::allocate(mem_size);
 
   if (memory_restorator.RestoreFromSnapshot(restored_memory_buffer, mem_size,
                                             nullptr)) {

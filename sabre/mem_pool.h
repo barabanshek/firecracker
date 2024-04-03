@@ -19,7 +19,8 @@ public:
     if (total_size_ % kChunkSize)
       return -1;
 
-    mem_buff_ = std::move(utils::mmap_allocate(total_size_, -1, false, true));
+    mem_buff_ =
+        std::move(utils::m_mmap::allocate(total_size_, -1, false, true));
     if (mem_buff_.get() == nullptr) {
       return -1;
     }
@@ -64,7 +65,7 @@ public:
 
 private:
   size_t total_size_;
-  std::unique_ptr<uint8_t, utils::MMapDeleter> mem_buff_;
+  utils::m_mmap::Memory mem_buff_;
   std::queue<size_t> free_chunks;
 };
 

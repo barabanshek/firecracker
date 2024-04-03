@@ -125,7 +125,7 @@ auto BM_BenchmarkMemoryRestorator = [](benchmark::State &state,
     state.SkipWithMessage("Failed to drop caches.");
   }
 
-  auto restored_memory_buffer = utils::mmap_allocate(total_size);
+  auto restored_memory_buffer = utils::m_mmap::allocate(total_size);
   for (auto _ : state) {
     if (memory_restorator.RestoreFromSnapshot(restored_memory_buffer,
                                               total_size, nullptr)) {

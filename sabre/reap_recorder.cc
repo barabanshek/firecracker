@@ -238,7 +238,7 @@ int ReapRecorder::Restore(uint8_t *mem, size_t size,
     RLOG(0) << "Failed to install Reap pages";
     return -1;
   }
-  std::unique_ptr<uint8_t, utils::MMapDeleter> mem_region;
+  utils::m_mmap::Memory mem_region;
   mem_region.reset(reinterpret_cast<uint8_t *>(guest_mem_base_));
   if (memory_restorator.RestoreFromSnapshot(mem_region, size)) {
     RLOG(0) << "Failed to install Reap pages";
@@ -266,8 +266,7 @@ int ReapRecorder::Restore(uint8_t *mem, size_t size,
 }
 
 int ReapRecorder::MmapUnderlyingSnapshotFile(
-    const std::string &snapshot_filename,
-    std::unique_ptr<uint8_t, utils::MMapDeleter> &mem) const {
+    const std::string &snapshot_filename, utils::m_mmap::Memory &mem) const {
   // Mmap underlying snapshot file.
   int snapshot_fd = open(snapshot_filename.c_str(), O_RDWR);
   if (snapshot_fd == -1) {
@@ -278,7 +277,8 @@ int ReapRecorder::MmapUnderlyingSnapshotFile(
       static_cast<size_t>(lseek(snapshot_fd, 0L, SEEK_END));
   lseek(snapshot_fd, 0L, SEEK_SET);
 
-  auto underlying_mem = utils::mmap_allocate(snapshot_file_size, snapshot_fd);
+  auto underlying_mem =
+      utils::m_mmap::allocate(snapshot_file_size, snapshot_fd);
   if (underlying_mem.get() == nullptr) {
     RLOG(0) << "Error during snapshot file mmap.";
     return -1;

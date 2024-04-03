@@ -103,7 +103,7 @@ uint8_t RestorePartitions(const char *snapshot_filename, uint64_t m_addr,
     return 1;
   }
 
-  std::unique_ptr<uint8_t, utils::MMapDeleter> mem_region;
+  utils::m_mmap::Memory mem_region;
   mem_region.reset(reinterpret_cast<uint8_t *>(m_addr));
   if (memory_restorator.RestoreFromSnapshot(mem_region, m_size)) {
     RLOG(0) << "Failed to restore memory.";

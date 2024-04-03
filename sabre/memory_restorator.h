@@ -93,8 +93,7 @@ public:
                    uint64_t base_address) const;
 
   int RestoreFromSnapshot(
-      std::unique_ptr<uint8_t, utils::MMapDeleter> &mem_region,
-      size_t mem_region_size,
+      utils::m_mmap::Memory &mem_region, size_t mem_region_size,
       const MemoryPartitions *original_partitions = nullptr);
 
   // Debug API.

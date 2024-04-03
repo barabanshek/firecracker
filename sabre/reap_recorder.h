@@ -36,8 +36,8 @@ public:
 
 private:
   std::string sock_filename_;
-  std::unique_ptr<uint8_t, utils::MMapDeleter> snapshot_file_mem_;
-  std::unique_ptr<uint8_t, utils::MallocDeleter> ws_file_mem_;
+  utils::m_mmap::Memory snapshot_file_mem_;
+  utils::m_malloc::Memory ws_file_mem_;
 
   std::string ws_filename_;
 
@@ -61,9 +61,8 @@ private:
   volatile bool do_write_records_ = false;
   std::vector<uint64_t> recordings_;
 
-  int MmapUnderlyingSnapshotFile(
-      const std::string &snapshot_filename,
-      std::unique_ptr<uint8_t, utils::MMapDeleter> &mem) const;
+  int MmapUnderlyingSnapshotFile(const std::string &snapshot_filename,
+                                 utils::m_mmap::Memory &mem) const;
 
   int EnableUserFaultFd(const uint8_t *mem, size_t size);
   int DisableUserFaultFd();

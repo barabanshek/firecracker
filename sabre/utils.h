@@ -18,14 +18,15 @@ static size_t kPageSize = 4096;
 } // namespace sys
 
 namespace utils {
-//
-/// AUX.
-//
+
+// AUX stuff.
 #define PACKED_STRUCTURE typedef struct __attribute__((__packed__))
 
+// Nice constants.
 static constexpr uint64_t kkB = 1024;
 static constexpr uint64_t kMB = 1024 * 1024;
 
+// Time measurement tool.
 class TimeScope {
 public:
   TimeScope() {
@@ -51,20 +52,23 @@ private:
   std::chrono::time_point<std::chrono::high_resolution_clock> last_tick_;
 };
 
-//
-/// Memory allocators.
-//
-class MMapDeleter {
+// Memory allocators.
+// Just nullptr memory.
+#define nil Memory(nullptr)
+
+// Allocator based on mmap.
+namespace m_mmap {
+class Deleter {
 public:
+  // Gets called when the owning unique_ptr is released.
   void operator()(void *ptr) const {
     if (ptr != nullptr)
       munmap(ptr, size_);
     if (fd_ != -1)
-      // TODO(Nikita): no needs to clode it here, can be close right after being
-      // mmap'ed
       close(fd_);
   }
 
+  // Set parameters of this memory.
   void set_size(size_t size) { size_ = size; }
   void set_fd(int fd) { fd_ = fd; }
 
@@ -73,17 +77,16 @@ private:
   int fd_ = -1;
 };
 
-class MallocDeleter {
-public:
-  void operator()(void *ptr) const {
-    if (ptr != nullptr)
-      free(ptr);
-  }
-};
+// Main type for this memory.
+typedef std::unique_ptr<uint8_t, Deleter> Memory;
 
-static std::unique_ptr<uint8_t, MMapDeleter>
-mmap_allocate(size_t size, int fd = -1, bool huge_pages = false,
-              bool prefault = false) {
+/// Allocate @param size of memory using mmap; if @param fd is set, allocate
+/// from file; if @param huge_pages is set, use huge pages; prefault memory if
+/// @param prefault is true.
+/// Returns a unique_ptr managed memory region with deallocation logic specified
+/// in class Deleter.
+static Memory allocate(size_t size, int fd = -1, bool huge_pages = false,
+                       bool prefault = false) {
   int flags = 0;
   if (fd > 0) {
     flags = prefault ? MAP_SHARED | MAP_POPULATE : MAP_SHARED;
@@ -99,35 +102,22 @@ mmap_allocate(size_t size, int fd = -1, bool huge_pages = false,
   if (ptr == MAP_FAILED)
     return nullptr;
 
-  std::unique_ptr<uint8_t, MMapDeleter> unique_ptr(ptr);
+  Memory unique_ptr(ptr);
   unique_ptr.get_deleter().set_size(size);
   return unique_ptr;
 }
 
-#define mmap_nullptr std::unique_ptr<uint8_t, utils::MMapDeleter>(nullptr)
-
-static std::unique_ptr<uint8_t, MallocDeleter>
-malloc_allocate(size_t size, bool prefault = false) {
-  auto ptr = std::unique_ptr<uint8_t, MallocDeleter>(
-      reinterpret_cast<uint8_t *>(malloc(size)));
-  if (prefault)
-    std::memset(ptr.get(), 1, size);
-  return ptr;
-}
-
-#define malloc_nullptr std::unique_ptr<uint8_t, utils::MallocDeleter>(nullptr)
-
-static std::unique_ptr<uint8_t, MMapDeleter> shem_allocate(size_t size,
-                                                           int *fd) {
+/// Allocate memory of size @param size backed by shem at @param fd.
+static Memory shem_allocate(size_t size, int *fd) {
   bool fresh = false;
   if (*fd == -1) {
     const char *name = "shm.file";
     *fd = shm_open(name, O_RDWR | O_CREAT, 0644);
     if (*fd == -1) {
-      return std::unique_ptr<uint8_t, MMapDeleter>(nullptr);
+      return Memory(nullptr);
     }
     if (ftruncate(*fd, size)) {
-      return std::unique_ptr<uint8_t, MMapDeleter>(nullptr);
+      return Memory(nullptr);
     }
     fresh = true;
   }
@@ -136,13 +126,42 @@ static std::unique_ptr<uint8_t, MMapDeleter> shem_allocate(size_t size,
   if (ptr == MAP_FAILED)
     return nullptr;
 
-  std::unique_ptr<uint8_t, MMapDeleter> unique_ptr(ptr);
+  Memory unique_ptr(ptr);
   unique_ptr.get_deleter().set_size(size);
   if (fresh) {
     unique_ptr.get_deleter().set_fd(*fd);
   }
   return unique_ptr;
 }
+
+} // namespace m_mmap
+
+// Allocator based on malloc.
+namespace m_malloc {
+class Deleter {
+public:
+  // Gets called when the owning unique_ptr is released.
+  void operator()(void *ptr) const {
+    if (ptr != nullptr)
+      free(ptr);
+  }
+};
+
+// Main type for this memory.
+typedef std::unique_ptr<uint8_t, Deleter> Memory;
+
+/// Allocate @param size of memory using malloc; prefault memory if
+/// @param prefault is true.
+/// Returns a unique_ptr managed memory region with deallocation logic specified
+/// in class MallocDeleter.
+static Memory allocate(size_t size, bool prefault = false) {
+  auto ptr = Memory(reinterpret_cast<uint8_t *>(malloc(size)));
+  if (prefault)
+    std::memset(ptr.get(), 1, size);
+  return ptr;
+}
+
+} // namespace m_malloc
 
 } // namespace utils
 
