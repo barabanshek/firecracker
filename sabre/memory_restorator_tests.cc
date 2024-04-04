@@ -87,29 +87,39 @@ protected:
             .max_hardware_jobs = 1,
             .passthrough = false};
 
+    acc::MemoryRestorator::MemoryRestoratotConfig cfg_single_passthrough = {
+        .execution_path = qpl_exec_path,
+        .partition_hanlding_path =
+            acc::MemoryRestorator::kHandleAsSinglePartition,
+        .scattered_partition_handling_path =
+            acc::MemoryRestorator::kDoDynamicHuffmanForScatteredPartitions,
+        .sigle_partition_handling_path =
+            acc::MemoryRestorator::kHandleWithUffdioCopy,
+        .restored_memory_owner = acc::MemoryRestorator::kUserApplication,
+        .max_hardware_jobs = 1,
+        .passthrough = true};
+
     memory_restorator_scattered_dynamic =
         std::unique_ptr<acc::MemoryRestorator>(
             new acc::MemoryRestorator(cfg_scattered_dynamic, "test", nullptr));
-    memory_restorator_scattered_dynamic->Init();
 
     memory_restorator_scattered_static = std::unique_ptr<acc::MemoryRestorator>(
         new acc::MemoryRestorator(cfg_scattered_static, "test", nullptr));
-    memory_restorator_scattered_static->Init();
 
     memory_restorator_single_uffdiocopy =
         std::unique_ptr<acc::MemoryRestorator>(
             new acc::MemoryRestorator(cfg_single_uffdiocopy, "test", nullptr));
-    memory_restorator_single_uffdiocopy->Init();
 
     memory_restorator_scattered_static_app_owner =
         std::unique_ptr<acc::MemoryRestorator>(new acc::MemoryRestorator(
             cfg_scattered_static_app_owner, "test", nullptr));
-    memory_restorator_scattered_static_app_owner->Init();
 
     memory_restorator_single_uffdiocopy_app_owner =
         std::unique_ptr<acc::MemoryRestorator>(new acc::MemoryRestorator(
             cfg_single_uffdiocopy_app_owner, "test", nullptr));
-    memory_restorator_single_uffdiocopy_app_owner->Init();
+
+    memory_restorator_passthrough = std::unique_ptr<acc::MemoryRestorator>(
+        new acc::MemoryRestorator(cfg_single_passthrough, "test", nullptr));
   }
 
   ~MemoryRestoratorTest() {}
@@ -193,6 +203,9 @@ protected:
     if (app_owner)
       restored_memory_buffer = utils::m_mmap::allocate(mem_size);
 
+    // Init memory restorator.
+    EXPECT_TRUE(0 == memory_restorator->Init());
+
     // Make a snapshot.
     EXPECT_TRUE(0 == memory_restorator->MakeSnapshot(
                          memory, reinterpret_cast<uint64_t>(
@@ -225,6 +238,7 @@ protected:
       memory_restorator_scattered_static_app_owner;
   std::unique_ptr<acc::MemoryRestorator>
       memory_restorator_single_uffdiocopy_app_owner;
+  std::unique_ptr<acc::MemoryRestorator> memory_restorator_passthrough;
 };
 
 // Common defines
@@ -360,4 +374,18 @@ TEST_F(MemoryRestoratorTest, SingleUffdiocopyAppOwner) {
   makeAndRestoreSnapshot(
       this->memory_restorator_single_uffdiocopy_app_owner.get(),
       memory_partitions, mem_size, true);
+}
+
+TEST_F(MemoryRestoratorTest, PassthroughStartingFromZeroPageOffset) {
+  MEMBUF_256
+  initSparsePartitions(memory_buffer, mem_size, 2, 0, memory_partitions);
+  makeAndRestoreSnapshot(this->memory_restorator_passthrough.get(),
+                         memory_partitions, mem_size, true);
+}
+
+TEST_F(MemoryRestoratorTest, PassthroughStartingFromNonZeroPageOffset) {
+  MEMBUF_256
+  initSparsePartitions(memory_buffer, mem_size, 2, 1, memory_partitions);
+  makeAndRestoreSnapshot(this->memory_restorator_passthrough.get(),
+                         memory_partitions, mem_size, true);
 }

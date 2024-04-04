@@ -544,7 +544,7 @@ int MemoryRestorator::RestoreFromSnapshot(
       return -1;
     }
   } else {
-    // No decompression will be done (this is fop reap), just read it with
+    // No decompression will be done (this is fop REAP), just read it with
     // O_DIRECT.
     snapshot_fd = open(snapshot_filename.c_str(), O_RDWR | O_DIRECT);
     if (snapshot_fd == -1) {
