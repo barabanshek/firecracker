@@ -42,6 +42,8 @@ sudo ./build/sabre/memory_restorator_demo
 sudo -E ./build/sabre/memory_restorator_test
 ```
 
+For regression, even if all tests pass, one still must run the microbenchmark to A/B-test the changes do not make things slower.
+
 ## Running the microbenchmark
 
 The microbenchmark is designed to reproduce *Figure 9* from the paper. It runs Sabre over snapshots of different sparsities (over the specified dataset) and in different modes. For the best results, use real uVM snapshots as the datasets.
