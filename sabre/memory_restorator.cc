@@ -940,13 +940,14 @@ uint8_t *MemoryRestorator::GetMemoryFromMemPool(size_t size) {
   return m_buff;
 }
 
-int MemoryRestorator::DropCaches() const {
+int MemoryRestorator::DropCaches(bool supress_output) const {
   std::vector<std::string> filenames = {
       snapshot_filename_ + "." + kPartitionInfoFileNameSuffix,
       snapshot_filename_ + "." + kSnapshotFileNameSuffix};
   for (auto const &filename : filenames) {
     if (system((std::string("sudo dd of=") + filename +
-                " oflag=nocache conv=notrunc,fdatasync count=0")
+                " oflag=nocache conv=notrunc,fdatasync count=0" +
+                (supress_output ? " status=none" : ""))
                    .c_str()))
       return -1;
   }

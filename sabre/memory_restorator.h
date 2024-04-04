@@ -110,7 +110,7 @@ public:
   // Debug API.
   bool ComparePartitions(const MemoryPartitions &p1,
                          const MemoryPartitions &p2) const;
-  int DropCaches() const;
+  int DropCaches(bool supress_output = false) const;
 
   Metrics GetMetrics() const { return metrics_; }
 
