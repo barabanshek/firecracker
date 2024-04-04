@@ -1,8 +1,9 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import sys
 
 # Specify the path to your CSV file
-csv_file_path = 'results.csv'
+csv_file_path = sys.argv[1]
 sparsities = ["1",  "2",   "4",    "10",   "20", "50", "100", "1k", "5k", "20k"]
 
 text_size_big = 20
