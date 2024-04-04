@@ -61,6 +61,32 @@ protected:
         .max_hardware_jobs = 1,
         .passthrough = false};
 
+    acc::MemoryRestorator::MemoryRestoratotConfig
+        cfg_scattered_static_app_owner = {
+            .execution_path = qpl_exec_path,
+            .partition_hanlding_path =
+                acc::MemoryRestorator::kHandleAsScatteredPartitions,
+            .scattered_partition_handling_path =
+                acc::MemoryRestorator::kDoStaticHuffmanForScatteredPartitions,
+            .sigle_partition_handling_path =
+                acc::MemoryRestorator::kHandleWithUffdioCopy,
+            .restored_memory_owner = acc::MemoryRestorator::kUserApplication,
+            .max_hardware_jobs = 1,
+            .passthrough = false};
+
+    acc::MemoryRestorator::MemoryRestoratotConfig
+        cfg_single_uffdiocopy_app_owner = {
+            .execution_path = qpl_exec_path,
+            .partition_hanlding_path =
+                acc::MemoryRestorator::kHandleAsSinglePartition,
+            .scattered_partition_handling_path =
+                acc::MemoryRestorator::kDoStaticHuffmanForScatteredPartitions,
+            .sigle_partition_handling_path =
+                acc::MemoryRestorator::kHandleWithUffdioCopy,
+            .restored_memory_owner = acc::MemoryRestorator::kUserApplication,
+            .max_hardware_jobs = 1,
+            .passthrough = false};
+
     memory_restorator_scattered_dynamic =
         std::unique_ptr<acc::MemoryRestorator>(
             new acc::MemoryRestorator(cfg_scattered_dynamic, "test", nullptr));
@@ -74,6 +100,16 @@ protected:
         std::unique_ptr<acc::MemoryRestorator>(
             new acc::MemoryRestorator(cfg_single_uffdiocopy, "test", nullptr));
     memory_restorator_single_uffdiocopy->Init();
+
+    memory_restorator_scattered_static_app_owner =
+        std::unique_ptr<acc::MemoryRestorator>(new acc::MemoryRestorator(
+            cfg_scattered_static_app_owner, "test", nullptr));
+    memory_restorator_scattered_static_app_owner->Init();
+
+    memory_restorator_single_uffdiocopy_app_owner =
+        std::unique_ptr<acc::MemoryRestorator>(new acc::MemoryRestorator(
+            cfg_single_uffdiocopy_app_owner, "test", nullptr));
+    memory_restorator_single_uffdiocopy_app_owner->Init();
   }
 
   ~MemoryRestoratorTest() {}
@@ -152,8 +188,10 @@ protected:
   void
   makeAndRestoreSnapshot(acc::MemoryRestorator *memory_restorator,
                          const acc::MemoryRestorator::MemoryPartitions &memory,
-                         size_t mem_size) const {
+                         size_t mem_size, bool app_owner = false) const {
     auto restored_memory_buffer = utils::m_mmap::nil;
+    if (app_owner)
+      restored_memory_buffer = utils::m_mmap::allocate(mem_size);
 
     // Make a snapshot.
     EXPECT_TRUE(0 == memory_restorator->MakeSnapshot(
@@ -183,165 +221,143 @@ protected:
   std::unique_ptr<acc::MemoryRestorator> memory_restorator_scattered_dynamic;
   std::unique_ptr<acc::MemoryRestorator> memory_restorator_scattered_static;
   std::unique_ptr<acc::MemoryRestorator> memory_restorator_single_uffdiocopy;
+  std::unique_ptr<acc::MemoryRestorator>
+      memory_restorator_scattered_static_app_owner;
+  std::unique_ptr<acc::MemoryRestorator>
+      memory_restorator_single_uffdiocopy_app_owner;
 };
 
-TEST_F(MemoryRestoratorTest, RandomPartitions_ScatteredDynamic) {
-  size_t mem_size = 256 * utils::kMB;
-  auto memory_buffer = utils::m_malloc::allocate(mem_size);
+// Common defines
+#define MEMBUF_256                                                             \
+  size_t mem_size = 256 * utils::kMB;                                          \
+  auto memory_buffer = utils::m_malloc::allocate(mem_size);                    \
   acc::MemoryRestorator::MemoryPartitions memory_partitions;
-  initRandomPartitions(memory_buffer, mem_size, 128, 100, memory_partitions);
 
+#define MEMBUF_1024                                                            \
+  size_t mem_size = 1024 * utils::kMB;                                         \
+  auto memory_buffer = utils::m_malloc::allocate(mem_size);                    \
+  acc::MemoryRestorator::MemoryPartitions memory_partitions;
+
+// Tests.
+TEST_F(MemoryRestoratorTest, RandomPartitions_ScatteredDynamic) {
+  MEMBUF_256
+  initRandomPartitions(memory_buffer, mem_size, 128, 100, memory_partitions);
   makeAndRestoreSnapshot(this->memory_restorator_scattered_dynamic.get(),
                          memory_partitions, mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, RandomPartitions_ScatteredStatic) {
-  size_t mem_size = 256 * utils::kMB;
-  auto memory_buffer = utils::m_malloc::allocate(mem_size);
-  acc::MemoryRestorator::MemoryPartitions memory_partitions;
+  MEMBUF_256
   initRandomPartitions(memory_buffer, mem_size, 128, 100, memory_partitions);
-
   makeAndRestoreSnapshot(this->memory_restorator_scattered_static.get(),
                          memory_partitions, mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, RandomPartitions_ScatteredStaticCompressible) {
-  size_t mem_size = 256 * utils::kMB;
-  auto memory_buffer = utils::m_malloc::allocate(mem_size);
-  acc::MemoryRestorator::MemoryPartitions memory_partitions;
+  MEMBUF_256
   initRandomPartitions(memory_buffer, mem_size, 128, 5, memory_partitions);
-
   makeAndRestoreSnapshot(this->memory_restorator_scattered_static.get(),
                          memory_partitions, mem_size);
 }
 
 TEST_F(MemoryRestoratorTest,
        RandomPartitions_ScatteredStaticCompressibleHugeMemory) {
-  size_t mem_size = 1024 * utils::kMB;
-  auto memory_buffer = utils::m_malloc::allocate(mem_size);
-  acc::MemoryRestorator::MemoryPartitions memory_partitions;
+  MEMBUF_1024
   initRandomPartitions(memory_buffer, mem_size, 128, 5, memory_partitions);
-
   makeAndRestoreSnapshot(this->memory_restorator_scattered_static.get(),
                          memory_partitions, mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, RandomPartitions_SingleUffdiocopy) {
-  size_t mem_size = 256 * utils::kMB;
-  auto memory_buffer = utils::m_malloc::allocate(mem_size);
-  acc::MemoryRestorator::MemoryPartitions memory_partitions;
+  MEMBUF_256
   initRandomPartitions(memory_buffer, mem_size, 128, 100, memory_partitions);
-
   makeAndRestoreSnapshot(this->memory_restorator_single_uffdiocopy.get(),
                          memory_partitions, mem_size);
 }
 
 TEST_F(MemoryRestoratorTest,
        RandomPartitions_SingleUffdiocopyCompressibleHugeMemory) {
-  size_t mem_size = 1024 * utils::kMB;
-  auto memory_buffer = utils::m_malloc::allocate(mem_size);
-  acc::MemoryRestorator::MemoryPartitions memory_partitions;
+  MEMBUF_1024
   initRandomPartitions(memory_buffer, mem_size, 128, 5, memory_partitions);
-
   makeAndRestoreSnapshot(this->memory_restorator_single_uffdiocopy.get(),
                          memory_partitions, mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, SparsePartitions_ScatteredDynamic) {
-
-  size_t mem_size = 256 * utils::kMB;
-  auto memory_buffer = utils::m_malloc::allocate(mem_size);
-  static acc::MemoryRestorator::MemoryPartitions memory_partitions;
+  MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 10000, 0, memory_partitions);
-
   makeAndRestoreSnapshot(this->memory_restorator_scattered_dynamic.get(),
                          memory_partitions, mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, SparsePartitions_ScatteredStatic) {
-
-  size_t mem_size = 256 * utils::kMB;
-  auto memory_buffer = utils::m_malloc::allocate(mem_size);
-  static acc::MemoryRestorator::MemoryPartitions memory_partitions;
+  MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 10000, 0, memory_partitions);
-
   makeAndRestoreSnapshot(this->memory_restorator_scattered_static.get(),
                          memory_partitions, mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, SparsePartitions_SingleUffdiocopy) {
-
-  size_t mem_size = 256 * utils::kMB;
-  auto memory_buffer = utils::m_malloc::allocate(mem_size);
-  static acc::MemoryRestorator::MemoryPartitions memory_partitions;
+  MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 10000, 0, memory_partitions);
-
   makeAndRestoreSnapshot(this->memory_restorator_single_uffdiocopy.get(),
                          memory_partitions, mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, EveryOtherPage_ScatteredDynamic) {
-
-  size_t mem_size = 256 * utils::kMB;
-  auto memory_buffer = utils::m_malloc::allocate(mem_size);
-  static acc::MemoryRestorator::MemoryPartitions memory_partitions;
+  MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 2, 0, memory_partitions);
-
   makeAndRestoreSnapshot(this->memory_restorator_scattered_dynamic.get(),
                          memory_partitions, mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, EveryOtherPage_ScatteredStatic) {
-
-  size_t mem_size = 256 * utils::kMB;
-  auto memory_buffer = utils::m_malloc::allocate(mem_size);
-  static acc::MemoryRestorator::MemoryPartitions memory_partitions;
+  MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 2, 0, memory_partitions);
-
   makeAndRestoreSnapshot(this->memory_restorator_scattered_static.get(),
                          memory_partitions, mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, EveryOtherPage_SingleUffdiocopy) {
-
-  size_t mem_size = 256 * utils::kMB;
-  auto memory_buffer = utils::m_malloc::allocate(mem_size);
-  static acc::MemoryRestorator::MemoryPartitions memory_partitions;
+  MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 2, 0, memory_partitions);
-
   makeAndRestoreSnapshot(this->memory_restorator_single_uffdiocopy.get(),
                          memory_partitions, mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, EveryOtherPage_ScatteredDynamicNonZeroOffset) {
-
-  size_t mem_size = 256 * utils::kMB;
-  auto memory_buffer = utils::m_malloc::allocate(mem_size);
-  static acc::MemoryRestorator::MemoryPartitions memory_partitions;
+  MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 2, 1, memory_partitions);
-
   makeAndRestoreSnapshot(this->memory_restorator_scattered_dynamic.get(),
                          memory_partitions, mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, EveryOtherPage_ScatteredStaticNonZeroOffset) {
-
-  size_t mem_size = 256 * utils::kMB;
-  auto memory_buffer = utils::m_malloc::allocate(mem_size);
-  static acc::MemoryRestorator::MemoryPartitions memory_partitions;
+  MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 2, 1, memory_partitions);
-
   makeAndRestoreSnapshot(this->memory_restorator_scattered_static.get(),
                          memory_partitions, mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, EveryOtherPage_SingleUffdiocopyNonZeroOffset) {
-
-  size_t mem_size = 256 * utils::kMB;
-  auto memory_buffer = utils::m_malloc::allocate(mem_size);
-  static acc::MemoryRestorator::MemoryPartitions memory_partitions;
+  MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 2, 1, memory_partitions);
-
   makeAndRestoreSnapshot(this->memory_restorator_single_uffdiocopy.get(),
                          memory_partitions, mem_size);
+}
+
+TEST_F(MemoryRestoratorTest, ScatteredStaticAppOwner) {
+  MEMBUF_256
+  initSparsePartitions(memory_buffer, mem_size, 2, 0, memory_partitions);
+  makeAndRestoreSnapshot(
+      this->memory_restorator_scattered_static_app_owner.get(),
+      memory_partitions, mem_size, true);
+}
+
+TEST_F(MemoryRestoratorTest, SingleUffdiocopyAppOwner) {
+  MEMBUF_256
+  initSparsePartitions(memory_buffer, mem_size, 2, 0, memory_partitions);
+  makeAndRestoreSnapshot(
+      this->memory_restorator_single_uffdiocopy_app_owner.get(),
+      memory_partitions, mem_size, true);
 }
