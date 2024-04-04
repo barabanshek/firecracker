@@ -531,7 +531,7 @@ int MemoryRestorator::RestoreFromSnapshot(
     // Advise sequential access to the snapshot file by IAA hardware.
     if (posix_fadvise(snapshot_fd, 0x00, snapshot_file_size,
                       POSIX_FADV_SEQUENTIAL)) {
-      RLOG(0) << "Error during posix_fadvise." << std::endl;
+      RLOG(0) << "Error during posix_fadvise.";
       return -1;
     }
 

@@ -9,6 +9,7 @@
 #include <sys/mman.h>
 
 #include <benchmark/benchmark.h>
+#include <gflags/gflags.h>
 
 #include "memory_restorator.h"
 #include "simple_logging.h"
@@ -165,12 +166,18 @@ auto BM_BenchmarkMemoryRestorator = [](benchmark::State &state,
   }
 };
 
+// Flags.
+DEFINE_string(dataset_path, "/", "Path to the datasets");
+DEFINE_string(dataset_name, "mysnapshot", "Name of the dataset");
+
 int main(int argc, char **argv) {
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
+
   // Setup.
   std::vector<size_t> sparsities = {1,  2,   4,    10,   20,
                                     50, 100, 1000, 5000, 20000};
 
-  make_datasets("/home/nikita/IAA_benchmarking/dataset/snapshots_tmp", "pillow",
+  make_datasets(FLAGS_dataset_path.c_str(), FLAGS_dataset_name.c_str(),
                 sparsities);
 
   // Register benchmarks.
