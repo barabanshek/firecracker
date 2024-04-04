@@ -36,6 +36,12 @@ This is more for fun and debug/early testing (before we got unit tests).
 sudo ./build/sabre/memory_restorator_demo
 ```
 
+## Running unit tests
+```
+# export SABRE_TEST_SOFTWARE_PATH=1 to use software compression for testing
+sudo -E ./build/sabre/memory_restorator_test
+```
+
 ## Running the microbenchmark
 
 The microbenchmark is designed to reproduce *Figure 9* from the paper. It runs Sabre over snapshots of different sparsities (over the specified dataset) and in different modes. For the best results, use real uVM snapshots as the datasets.
