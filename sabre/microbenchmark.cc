@@ -9,7 +9,6 @@
 #include <sys/mman.h>
 
 #include <benchmark/benchmark.h>
-#include <gflags/gflags.h>
 
 #include "memory_restorator.h"
 #include "simple_logging.h"
@@ -17,7 +16,7 @@
 
 // Init logging infra.
 namespace logging {
-static constexpr int _g_log_severity_ = LOG_INFO;
+static constexpr int _g_log_severity_ = LOG_ERROR;
 }
 
 typedef std::map<std::string, std::tuple<size_t, uint8_t *>> CompressionDataset;
@@ -166,19 +165,23 @@ auto BM_BenchmarkMemoryRestorator = [](benchmark::State &state,
   }
 };
 
-// Flags.
-DEFINE_string(dataset_path, "/", "Path to the datasets");
-DEFINE_string(dataset_name, "mysnapshot", "Name of the dataset");
-
+// Usage:
+//   - export SABRE_DATASET_PATH=...
+//   - export SABRE_DATASET_NAME=...
+//   - sudo -E ./build/sabre/memory_restoration_micro --benchmark_repetitions=10 --benchmark_min_time=1x
 int main(int argc, char **argv) {
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
-
   // Setup.
   std::vector<size_t> sparsities = {1,  2,   4,    10,   20,
                                     50, 100, 1000, 5000, 20000};
 
-  make_datasets(FLAGS_dataset_path.c_str(), FLAGS_dataset_name.c_str(),
-                sparsities);
+  const char *dataset_path = std::getenv("SABRE_DATASET_PATH");
+  const char *dataset_name = std::getenv("SABRE_DATASET_NAME");
+  if (dataset_path == nullptr || dataset_name == nullptr) {
+    RLOG(LOG_ERROR) << "Empty dataset path.";
+    return -1;
+  }
+
+  make_datasets(dataset_path, dataset_name, sparsities);
 
   // Register benchmarks.
   for (auto const &sparsity : sparsities) {

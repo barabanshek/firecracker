@@ -32,3 +32,21 @@ sudo ./build/sabre/memory_restorator_demo
 ```
 
 ## Running the microbenchmark
+
+The microbenchmark is designed to reproduce *Figure 9* from the paper. It run Sabre over snapshots of different sparsities (over the specified dataset) and in different modes. For the best results, use real uVM snapshots as the datasets.
+
+```
+# Configure the machine and setup IAA hardware;
+#   - use <CPU frequency> is 2700000 to reproduce results from the paper
+sudo ./scripts/setup_node.sh <CPU frequency>
+
+# Export dataset location and name
+export SABRE_DATASET_PATH=<path to the dataset dir>
+export SABRE_DATASET_NAME=<name of the dataset>
+
+# Run benchmark
+sudo -E ./build/sabre/memory_restoration_micro --benchmark_repetitions=<N> --benchmark_min_time=1x --benchmark_format=csv --logtostderr | tee results.csv
+
+# Plot results
+python3 sabre/plot_microbenchmark.py
+```

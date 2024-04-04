@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Specify the path to your CSV file
-csv_file_path = 'results.1.csv'
+csv_file_path = 'results.csv'
 sparsities = ["1",  "2",   "4",    "10",   "20", "50", "100", "1k", "5k", "20k"]
 
 text_size_big = 20
@@ -17,11 +17,11 @@ df['name'] = df['name'].astype(str)
 df['real_time'] = df['real_time'] / (1000 * 1000)
 
 # Filter data for handling_0 and handling_1
-df_handling_I_hw = df[df['name'].str.contains("handling_0_passthrough_0_path_qpl_path_hardware")]
-df_handling_II_hw = df[df['name'].str.contains("handling_1_passthrough_0_path_qpl_path_hardware")]
-df_handling_I_sw = df[df['name'].str.contains("handling_0_passthrough_0_path_qpl_path_software")]
-df_handling_II_sw = df[df['name'].str.contains("handling_1_passthrough_0_path_qpl_path_software")]
-df_handling_passthrough = df[df['name'].str.contains("passthrough_1_path_qpl_path_hardware")]
+df_handling_I_hw = df[df['name'].str.contains("handling_0_passthrough_0_path_qpl_path_hardware_mean")]
+df_handling_II_hw = df[df['name'].str.contains("handling_1_passthrough_0_path_qpl_path_hardware_mean")]
+df_handling_I_sw = df[df['name'].str.contains("handling_0_passthrough_0_path_qpl_path_software_mean")]
+df_handling_II_sw = df[df['name'].str.contains("handling_1_passthrough_0_path_qpl_path_software_mean")]
+df_handling_passthrough = df[df['name'].str.contains("passthrough_1_path_qpl_path_hardware_mean")]
 
 # Create plots for handling_0 and handling_1
 fig, ax = plt.subplots(1, 2, figsize=(16, 4))
@@ -49,5 +49,7 @@ ax[1].legend(fontsize=text_size_medium)
 plt.tight_layout()
 
 # Save the figures as PNG and PDF
-plt.savefig('handling_plots.png')
-plt.savefig('handling_plots.pdf', format='pdf')
+plot_name = 'handle_plots'
+plt.savefig(f'{plot_name}.png')
+plt.savefig(f'{plot_name}.pdf', format='pdf')
+print(f'plots saved into {plot_name}')
