@@ -40,7 +40,7 @@ The microbenchmark is designed to reproduce *Figure 9* from the paper. It runs S
 
 ```
 # Configure the machine and setup IAA hardware;
-#   - use <CPU frequency> is 2700000 to reproduce results from the paper
+#   - use <CPU frequency> of 2700000 to reproduce results from the paper and figure bellow
 sudo ./scripts/setup_node.sh <CPU frequency>
 
 # Export dataset location and name
