@@ -13,7 +13,10 @@ namespace acc {
 
 class ReapRecorder {
 public:
-  ReapRecorder(const std::string &sock_filename);
+  ReapRecorder();
+
+  void Init(const std::string &sock_filename, bool do_compress = false);
+  void Init(bool do_compress = false);
 
   /// Init page recording in the region @param mem of size @param size.
   /// After this call, @param mem becomes being served via user space page fault
@@ -40,6 +43,7 @@ private:
   utils::m_malloc::Memory ws_file_mem_;
 
   std::string ws_filename_;
+  bool do_compress_;
 
   int sock_ = -1;
   std::thread sock_listening_thread_;

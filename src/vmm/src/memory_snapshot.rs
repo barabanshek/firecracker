@@ -146,7 +146,12 @@ impl SnapshotMemory for GuestMemoryMmap {
         dirty_bitmap: &DirtyBitmap,
     ) -> Result<(), SnapshotMemoryError> {
         println!("Creating dirty snapshot...");
-        let do_compression = env::var("FIRECRACKER_SNAPSHOT_COMPRESSION").expect("$FIRECRACKER_SNAPSHOT_COMPRESSION is not set") == "Enabled";
+        let do_compression_ = env::var("FIRECRACKER_SNAPSHOT_COMPRESSION").expect("$FIRECRACKER_SNAPSHOT_COMPRESSION is not set") == "Enabled";
+        let do_reap_recording= env::var("FIRECRACKER_SNAPSHOT_REAP_RECORD").expect("$FIRECRACKER_SNAPSHOT_REAP_RECORD is not set") == "Enabled";
+        let do_reap_restore =env::var("FIRECRACKER_SNAPSHOT_REAP_RESTORE").expect("$FIRECRACKER_SNAPSHOT_REAP_RESTORE is not set") == "Enabled";
+
+        let do_compression = do_compression_ && !do_reap_recording && !do_reap_restore;
+
         let mut writer_offset = 0;
         let page_size = get_page_size()?;
 

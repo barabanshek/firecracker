@@ -33,7 +33,7 @@ static acc::MemoryRestorator::MemoryPartitions _sPartitions;
 static MemoryPool _sRestoratorMemoryPool;
 
 // REAP recorder.
-acc::ReapRecorder _sReapRecorder("");
+acc::ReapRecorder _sReapRecorder;
 } // namespace
 
 // Initialize _sRestoratorMemoryPool.
@@ -71,8 +71,6 @@ uint8_t SnapshotPartitions(const char *snapshot_filename, uint64_t base_addr) {
     return 1;
   }
 
-  // TODO(Nikita): it's not 0 but rather the base address coming from
-  // firecracker.
   if (memory_restorator.MakeSnapshot(_sPartitions, base_addr)) {
     RLOG(0) << "Failed to make snapshot.";
     return 1;
@@ -114,9 +112,12 @@ uint8_t RestorePartitions(const char *snapshot_filename, uint64_t m_addr,
   return 0;
 }
 
-uint8_t InitReapRecorder(uint64_t r_addr, uint64_t r_size,
-                         const char *snapshot_filename,
-                         const char *ws_filename) {
+// Static state object: _sReapRecorder.
+// Dependent FFI functions: None.
+uint8_t InitReapRecorder(const char *sock_filename, uint64_t r_addr,
+                         uint64_t r_size, const char *snapshot_filename,
+                         const char *ws_filename, uint8_t do_compress) {
+  _sReapRecorder.Init(sock_filename, static_cast<bool>(do_compress));
   if (_sReapRecorder.StartListening(reinterpret_cast<uint8_t *>(r_addr), r_size,
                                     snapshot_filename, ws_filename)) {
     RLOG(0) << "Failed to init reap recorder.";
@@ -127,9 +128,12 @@ uint8_t InitReapRecorder(uint64_t r_addr, uint64_t r_size,
   return 0;
 }
 
+// Static state object: _sReapRecorder.
+// Dependent FFI functions: None.
 uint8_t RestoreReapSnapshot(uint64_t r_addr, uint64_t r_size,
                             const char *snapshot_filename,
-                            const char *ws_filename) {
+                            const char *ws_filename, uint8_t do_compress) {
+  _sReapRecorder.Init(static_cast<bool>(do_compress));
   if (_sReapRecorder.Restore(reinterpret_cast<uint8_t *>(r_addr), r_size,
                              snapshot_filename, ws_filename)) {
     RLOG(0) << "Failed to restore reap snapshot.";

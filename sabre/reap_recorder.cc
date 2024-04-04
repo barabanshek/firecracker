@@ -30,8 +30,17 @@ static constexpr int _g_log_severity_ = LOG_INFO;
 
 namespace acc {
 
-ReapRecorder::ReapRecorder(const std::string &sock_filename)
-    : sock_filename_(sock_filename) {}
+ReapRecorder::ReapRecorder() {}
+
+void ReapRecorder::Init(const std::string &sock_filename, bool do_compress) {
+  sock_filename_ = sock_filename;
+  do_compress_ = do_compress;
+}
+
+void ReapRecorder::Init(bool do_compress) {
+  sock_filename_ = "";
+  do_compress_ = do_compress;
+}
 
 void ReapRecorder::userfaultfd_handler_record_() {
   uffdio_copy uffdio_copy;
@@ -105,6 +114,11 @@ void ReapRecorder::sock_handler_() {
 int ReapRecorder::StartListening(uint8_t *mem, size_t size,
                                  const std::string &snapshot_filename,
                                  const std::string &ws_filename) {
+  if (sock_filename_ == "") {
+    RLOG(0) << "Failed to start listening, wrong socket filename.";
+    return -1;
+  }
+
   guest_mem_base_ = mem;
   guest_mem_size_ = size;
   ws_filename_ = ws_filename;
@@ -117,8 +131,7 @@ int ReapRecorder::StartListening(uint8_t *mem, size_t size,
   }
   struct sockaddr_un server;
   server.sun_family = AF_UNIX;
-  // TODO(Nikita): avoid hardcodding.
-  strcpy(server.sun_path, "/tmp/reap.sock");
+  strcpy(server.sun_path, sock_filename_.c_str());
   if (bind(sock_, (struct sockaddr *)&server, sizeof(struct sockaddr_un))) {
     RLOG(0) << "Failed to bind listening socket.";
     return -1;
@@ -201,12 +214,13 @@ int ReapRecorder::DumpRecordedPages() {
   acc::MemoryRestorator::MemoryRestoratotConfig cfg = {
       .execution_path = qpl_path_hardware,
       .partition_hanlding_path =
-          acc::MemoryRestorator::kHandleAsScatteredPartitions,
+          do_compress_ ? acc::MemoryRestorator::kHandleAsScatteredPartitions
+                       : acc::MemoryRestorator::kHandleAsSinglePartition,
       .sigle_partition_handling_path =
           acc::MemoryRestorator::kHandleWithUffdioCopy,
       .restored_memory_owner = acc::MemoryRestorator::kUserApplication,
       .max_hardware_jobs = 1,
-      .passthrough = false};
+      .passthrough = do_compress_ ? false : true};
 
   acc::MemoryRestorator memory_restorator(cfg, ws_filename_, nullptr);
   if (memory_restorator.Init()) {
@@ -226,12 +240,13 @@ int ReapRecorder::Restore(uint8_t *mem, size_t size,
   acc::MemoryRestorator::MemoryRestoratotConfig cfg = {
       .execution_path = qpl_path_hardware,
       .partition_hanlding_path =
-          acc::MemoryRestorator::kHandleAsScatteredPartitions,
+          do_compress_ ? acc::MemoryRestorator::kHandleAsScatteredPartitions
+                       : acc::MemoryRestorator::kHandleAsSinglePartition,
       .sigle_partition_handling_path =
           acc::MemoryRestorator::kHandleWithUffdioCopy,
       .restored_memory_owner = acc::MemoryRestorator::kUserApplication,
       .max_hardware_jobs = 1,
-      .passthrough = false};
+      .passthrough = do_compress_ ? false : true};
 
   acc::MemoryRestorator memory_restorator(cfg, ws_filename_, nullptr);
   if (memory_restorator.Init()) {

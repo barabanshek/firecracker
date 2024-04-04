@@ -31,8 +31,8 @@ use libc::size_t;
 
 extern "C" {
     fn RestorePartitions(filename: *const i8, m_addr: u64, m_size: u64) -> u8;
-    fn InitReapRecorder(r_addr: u64, r_size: u64, snapshot_filename: *const i8, ws_filename: *const i8) -> u8;
-    fn RestoreReapSnapshot(r_addr: u64, r_size: u64, snapshot_filename: *const i8, ws_filename: *const i8) -> u8;
+    fn InitReapRecorder(sock_filename: *const i8, r_addr: u64, r_size: u64, snapshot_filename: *const i8, ws_filename: *const i8, do_compress: u8) -> u8;
+    fn RestoreReapSnapshot(r_addr: u64, r_size: u64, snapshot_filename: *const i8, ws_filename: *const i8, do_compress: u8) -> u8;
 }
 
 /// Build a `MmapRegion` surrounded by guard pages.
@@ -65,7 +65,7 @@ fn build_guarded_region(
     let START = Instant::now();
 
     let guarded_size = size + GUARD_PAGE_COUNT * 2 * page_size;
-    if restoration_phase && do_compression {
+    if restoration_phase && do_compression && !do_reap_recording && !do_reap_restore {
         // Map the guarded range to PROT_NONE
         // SAFETY: Safe because the parameters are valid.
         let guard_addr = unsafe {
@@ -135,7 +135,8 @@ fn build_guarded_region(
             let ret = unsafe {
                 let c_string = std::ffi::CString::new("/fccd/snapshots/myrev-4/mem_file").unwrap();
                 let c_string_ws = std::ffi::CString::new("/home/nikita/snap/snap.ws").unwrap();
-                InitReapRecorder(region_start_addr as u64, size as u64, c_string.as_ptr(), c_string_ws.as_ptr())
+                let c_string_sock_filename = std::ffi::CString::new("/tmp/reap.sock").unwrap();
+                InitReapRecorder(c_string_sock_filename.as_ptr(), region_start_addr as u64, size as u64, c_string.as_ptr(), c_string_ws.as_ptr(), do_compression as u8)
             };
             if ret == 0 {
                 println!("REAP recorder is initialized.");
@@ -147,7 +148,7 @@ fn build_guarded_region(
             let ret = unsafe {
                 let c_string = std::ffi::CString::new("/fccd/snapshots/myrev-4/mem_file").unwrap();
                 let c_string_ws = std::ffi::CString::new("/home/nikita/snap/snap.ws").unwrap();
-                RestoreReapSnapshot(region_start_addr as u64, size as u64, c_string.as_ptr(), c_string_ws.as_ptr())
+                RestoreReapSnapshot(region_start_addr as u64, size as u64, c_string.as_ptr(), c_string_ws.as_ptr(), do_compression as u8)
             };
             if ret == 0 {
                 println!("REAP restored.");
