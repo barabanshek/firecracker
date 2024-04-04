@@ -53,4 +53,4 @@ python3 sabre/plot_microbenchmark.py
 
 This reproduces the follwoing characterization of Sabre memory restoration:
 
-![handling](images/handling_plots.pdf)
+![handling](images/handling_plots.png)
