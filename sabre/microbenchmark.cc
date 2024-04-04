@@ -14,6 +14,7 @@
 #include "simple_logging.h"
 #include "utils.h"
 
+// Init logging infra.
 namespace logging {
 static constexpr int _g_log_severity_ = LOG_INFO;
 }
@@ -95,7 +96,10 @@ auto BM_BenchmarkMemoryRestorator = [](benchmark::State &state,
                                        auto Inputs...) {
   va_list args;
   va_start(args, Inputs);
-  auto sparsity = Inputs;
+  auto execution_path = Inputs;
+  auto sparsity = va_arg(args, size_t);
+  auto handling = va_arg(args, int);
+  auto passthrough = va_arg(args, int);
   va_end(args);
 
   // Get dataset.
@@ -103,21 +107,23 @@ auto BM_BenchmarkMemoryRestorator = [](benchmark::State &state,
 
   // Do things.
   acc::MemoryRestorator::MemoryRestoratotConfig cfg = {
-      .execution_path = qpl_path_hardware,
+      .execution_path = execution_path,
       .partition_hanlding_path =
-          acc::MemoryRestorator::kHandleAsSinglePartition,
+          static_cast<acc::MemoryRestorator::PartitionHandlingPath>(handling),
       .sigle_partition_handling_path =
           acc::MemoryRestorator::kHandleWithUffdioCopy,
       .restored_memory_owner = acc::MemoryRestorator::kUserApplication,
       .max_hardware_jobs = 1,
-      .passthrough = false};
+      .passthrough = static_cast<bool>(passthrough)};
 
   acc::MemoryRestorator memory_restorator(cfg, "dummysnapshot");
   if (memory_restorator.Init()) {
     state.SkipWithMessage("Failed to initialize memory restorator.");
   }
 
-  if (memory_restorator.MakeSnapshot(partitions, 0)) {
+  if (memory_restorator.MakeSnapshot(
+          partitions,
+          reinterpret_cast<uint64_t>(std::get<0>(partitions.front())))) {
     state.SkipWithMessage("Failed to make snapshot.");
   }
 
@@ -126,12 +132,23 @@ auto BM_BenchmarkMemoryRestorator = [](benchmark::State &state,
   }
 
   auto restored_memory_buffer = utils::m_mmap::allocate(total_size);
+  assert(restored_memory_buffer.get() != nullptr);
   for (auto _ : state) {
     if (memory_restorator.RestoreFromSnapshot(restored_memory_buffer,
                                               total_size, nullptr)) {
       state.SkipWithMessage("Failed to restore from snapshot.");
     }
   }
+
+  // Append stat.
+  auto stat = memory_restorator.GetMetrics();
+  state.counters["mmap_dst_mem"] = stat.mmap_dst_mem;
+  state.counters["get_partition_info"] = stat.get_partition_info;
+  state.counters["mmap_snapshot"] = stat.mmap_snapshot;
+  state.counters["mmap_decompression_buff"] = stat.mmap_decompression_buff;
+  state.counters["decompress"] = stat.decompress;
+  state.counters["install_pages"] = stat.install_pages;
+  state.counters["mem_restore_total"] = stat.mem_restore_total;
 
   // Compare.
   size_t i = 0;
@@ -158,9 +175,27 @@ int main(int argc, char **argv) {
 
   // Register benchmarks.
   for (auto const &sparsity : sparsities) {
-    benchmark::RegisterBenchmark(std::string("BM_BenchmarkMemoryRestorator") +
-                                     "_sparsity_" + std::to_string(sparsity),
-                                 BM_BenchmarkMemoryRestorator, sparsity);
+    for (auto const &handling :
+         {acc::MemoryRestorator::kHandleAsSinglePartition,
+          acc::MemoryRestorator::kHandleAsScatteredPartitions}) {
+      for (int passthroug : {0, 1}) {
+        if (passthroug &&
+            handling == acc::MemoryRestorator::kHandleAsScatteredPartitions)
+          continue;
+
+        for (auto const &path : {qpl_path_hardware, qpl_path_software}) {
+          benchmark::RegisterBenchmark(
+              std::string("BM_BenchmarkMemoryRestorator") + "_sparsity_" +
+                  std::to_string(sparsity) + "_handling_" +
+                  std::to_string(handling) + "_passthrough_" +
+                  std::to_string(passthroug) + "_path_" +
+                  (path == qpl_path_hardware ? "qpl_path_hardware"
+                                             : "qpl_path_software"),
+              BM_BenchmarkMemoryRestorator, path, sparsity, handling,
+              passthroug);
+        }
+      }
+    }
   }
 
   benchmark::Initialize(&argc, argv);

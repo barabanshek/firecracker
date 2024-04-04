@@ -49,6 +49,17 @@ public:
     bool passthrough;
   };
 
+  // Performance metrics to measure time in the page restoration critical path.
+  struct Metrics {
+    uint64_t mmap_dst_mem;
+    uint64_t get_partition_info;
+    uint64_t mmap_snapshot;
+    uint64_t mmap_decompression_buff;
+    uint64_t decompress;
+    uint64_t install_pages;
+    uint64_t mem_restore_total;
+  };
+
   // This configuration shows the best performance of memory restoration on most
   // synthetic cases.
   static constexpr MemoryRestoratotConfig default_cfg = {
@@ -101,6 +112,8 @@ public:
                          const MemoryPartitions &p2) const;
   int DropCaches() const;
 
+  Metrics GetMetrics() const { return metrics_; }
+
 private:
   // All configurations is stored here.
   MemoryRestoratotConfig cfg_;
@@ -111,9 +124,10 @@ private:
   mutable std::queue<int> qpl_job_idx_free_;
   bool qpl_initialized_;
   size_t page_size_;
-  volatile size_t userfaultfd_it_;
-  volatile size_t userfaultfd_total_pages_to_install_;
-  MemoryPartitions userfaultfd_partitions_;
+  MemoryPartitions userfaultfd_source_partitions_;
+  MemoryPartitions userfaultfd_destination_partitions_;
+
+  Metrics metrics_;
 
   // For UFFDIO_CONTINUE userfaultfd serving.
   int shem_fd_;
@@ -145,10 +159,10 @@ private:
     return false;
   }
 
-  /// Installs all pages from @param partitions into @param mem of size @param
-  /// size.
-  int InstallAllPages(size_t size, const MemoryPartitions &partitions,
-                      const MemoryPartitions &decompressed_partitions);
+  /// Installs all pages from @param src_partitions into memory with @param
+  /// dst_partitions layout of size @param size.
+  int InstallAllPages(size_t size, const MemoryPartitions &dst_partitions,
+                      const MemoryPartitions &src_partitions);
   void fault_handler_thread(void *arg);
 
   /// Apply @param partitions_layout (with relative to zero page offsets) to

@@ -39,6 +39,7 @@ MemoryRestorator::MemoryRestorator(const MemoryRestoratotConfig &cfg,
       qpl_initialized_(false), shem_fd_(-1) {
   page_size_ = static_cast<size_t>(sysconf(_SC_PAGE_SIZE));
   assert(page_size_ == sys::kPageSize);
+  std::memset(&metrics_, 0, sizeof(Metrics));
 };
 
 MemoryRestorator::MemoryRestorator(const MemoryRestoratotConfig &cfg,
@@ -48,6 +49,7 @@ MemoryRestorator::MemoryRestorator(const MemoryRestoratotConfig &cfg,
       qpl_initialized_(false), shem_fd_(-1) {
   page_size_ = static_cast<size_t>(sysconf(_SC_PAGE_SIZE));
   assert(page_size_ == sys::kPageSize);
+  std::memset(&metrics_, 0, sizeof(Metrics));
 }
 
 MemoryRestorator::~MemoryRestorator() {
@@ -152,12 +154,16 @@ int MemoryRestorator::CompressSingleChunk(qpl_huffman_table_t c_huffman_table,
   job->next_in_ptr = const_cast<uint8_t *>(src);
   job->available_in = src_size;
   job->next_out_ptr = dst;
-  job->available_out = src_size - 1;
+  if (cfg_.partition_hanlding_path == kHandleAsSinglePartition)
+    // Here, we assume the compressed data will never exceed the original
+    // decompressed; I don't know why -1 is needed, without this, QPL failes.
+    job->available_out = src_size - 1;
+  else
+    // In scattered partitions, sometimes individual small partitions are not
+    // compressable, so we need to allow some extra space for them.
+    job->available_out = 2 * src_size - 1;
+
   job->flags = QPL_FLAG_OMIT_VERIFY | QPL_FLAG_FIRST | QPL_FLAG_LAST;
-  // if (first)
-  //   job->flags |= QPL_FLAG_FIRST;
-  // if (last)
-  //   job->flags |= QPL_FLAG_LAST;
 
   // If Huffman tables are not provided - do dynamic Huffman.
   if (c_huffman_table == nullptr)
@@ -441,8 +447,9 @@ int MemoryRestorator::RestoreFromSnapshot(
     }
   }
 
-  RLOG(1) << "Mmap destination memory, took: "
-          << time_begin.GetScopeTimeStamp<std::chrono::microseconds>() << "us ";
+  metrics_.mmap_dst_mem =
+      time_begin.GetScopeTimeStamp<std::chrono::microseconds>();
+  RLOG(1) << "Mmap destination memory, took: " << metrics_.mmap_dst_mem << "us";
 
   // Read partition info.
   auto partition_info_filename =
@@ -492,8 +499,10 @@ int MemoryRestorator::RestoreFromSnapshot(
   AlignMemoryPartitions(dst_mem_region.get(), snapshot_memory_partitions,
                         dst_memory_partitions, false);
 
-  RLOG(1) << "Get partition info, took: "
-          << time_begin.GetScopeTimeStamp<std::chrono::microseconds>() << "us ";
+  metrics_.get_partition_info =
+      time_begin.GetScopeTimeStamp<std::chrono::microseconds>();
+  RLOG(1) << "Get partition info, took: " << metrics_.get_partition_info
+          << "us";
 
   if (src_offset_size.size() == 0) {
     if (!cfg_.passthrough)
@@ -547,8 +556,10 @@ int MemoryRestorator::RestoreFromSnapshot(
     }
   }
 
+  metrics_.mmap_snapshot =
+      time_begin.GetScopeTimeStamp<std::chrono::microseconds>();
   RLOG(1) << "Mmap (and fetch if passthough) snapshot file, took: "
-          << time_begin.GetScopeTimeStamp<std::chrono::microseconds>() << " us";
+          << metrics_.mmap_snapshot << "us";
 
   if (cfg_.partition_hanlding_path == kHandleAsSinglePartition) {
     // We need to do the following:
@@ -594,9 +605,10 @@ int MemoryRestorator::RestoreFromSnapshot(
         return -1;
       }
 
+      metrics_.mmap_decompression_buff =
+          time_begin.GetScopeTimeStamp<std::chrono::microseconds>();
       RLOG(1) << "Mmap decompression buffer, took: "
-              << time_begin.GetScopeTimeStamp<std::chrono::microseconds>()
-              << " us";
+              << metrics_.mmap_decompression_buff << " us";
 
       // Decompress.
       size_t actual_decompress_size = 0;
@@ -618,9 +630,9 @@ int MemoryRestorator::RestoreFromSnapshot(
                             snapshot_memory_partitions,
                             memory_partitions_to_install, true);
 
-      RLOG(1) << "Decompress, took: "
-              << time_begin.GetScopeTimeStamp<std::chrono::microseconds>()
-              << " us";
+      metrics_.decompress =
+          time_begin.GetScopeTimeStamp<std::chrono::microseconds>();
+      RLOG(1) << "Decompress, took: " << metrics_.decompress << " us";
 
       // If in debug, compare partitions.
       if (original_partitions != nullptr) {
@@ -643,9 +655,9 @@ int MemoryRestorator::RestoreFromSnapshot(
       return -1;
     }
 
-    RLOG(1) << "Install pages, took: "
-            << time_begin.GetScopeTimeStamp<std::chrono::microseconds>()
-            << " us";
+    metrics_.install_pages =
+        time_begin.GetScopeTimeStamp<std::chrono::microseconds>();
+    RLOG(1) << "Install pages, took: " << metrics_.install_pages << " us";
 
     // Release some memory.
     // TODO(Nikita): do it automatically!
@@ -738,14 +750,16 @@ int MemoryRestorator::RestoreFromSnapshot(
       }
     }
 
-    RLOG(1) << "Decompress, took: "
-            << time_begin.GetScopeTimeStamp<std::chrono::microseconds>()
-            << " us";
+    metrics_.decompress =
+        time_begin.GetScopeTimeStamp<std::chrono::microseconds>();
+    RLOG(1) << "Decompress, took: " << metrics_.decompress << " us";
   }
 
-  RLOG(1) << "Memory restoration, took: "
-          << time_begin.GetAbsoluteTimeStamp<std::chrono::microseconds>()
+  metrics_.mem_restore_total =
+      time_begin.GetAbsoluteTimeStamp<std::chrono::microseconds>();
+  RLOG(1) << "Memory restoration, took: " << metrics_.mem_restore_total
           << " us";
+
   mem_region = std::move(dst_mem_region);
   close(snapshot_fd);
   return 0;
@@ -759,77 +773,65 @@ void MemoryRestorator::fault_handler_thread(void *arg) {
   uffdio_continue uffdio_continue;
   uffd_msg msg;
 
-  while (true) {
-    pollfd.fd = uffd;
-    pollfd.events = POLLIN;
-    int nready = poll(&pollfd, 1, -1);
-    if (nready == -1) {
-      RLOG(0) << "uffd poll error.";
-      return;
-    }
+  pollfd.fd = uffd;
+  pollfd.events = POLLIN;
+  int nready = poll(&pollfd, 1, -1);
+  if (nready == -1) {
+    RLOG(0) << "uffd poll error.";
+    return;
+  }
 
-    ssize_t nread = read(uffd, &msg, sizeof(msg));
-    if (nread == 0) {
-      RLOG(0) << "EOF on userfaultfd.";
-      return;
-    }
+  ssize_t nread = read(uffd, &msg, sizeof(msg));
+  if (nread == 0 || nread == -1) {
+    RLOG(0) << "Failed to read on uffd.";
+    return;
+  }
 
-    if (nread == -1) {
-      RLOG(0) << "Failed to read on uffd.";
-      return;
-    }
+  if (msg.event != UFFD_EVENT_PAGEFAULT) {
+    RLOG(0) << "Unexpected event on userfaultfd.";
+    return;
+  }
 
-    if (msg.event != UFFD_EVENT_PAGEFAULT) {
-      RLOG(0) << "Unexpected event on userfaultfd.";
-      return;
-    }
+  assert(msg.arg.pagefault.address % page_size_ == 0);
 
-    assert(msg.arg.pagefault.address % page_size_ == 0);
-
-    //
-    // std::cout << "INSTALL: by: " << msg.arg.pagefault.address << ", size= "
-    //           << std::get<1>(userfaultfd_partitions_[userfaultfd_it_])
-    //           << ", first_word= "
-    //           << *(uint64_t *)(std::get<0>(
-    //                  userfaultfd_partitions_[userfaultfd_it_]))
-    //          ;
-
-    // Handle depending on the path.
-    if (cfg_.sigle_partition_handling_path == kHandleWithUffdioCopy) {
+  // Handle depending on the path.
+  size_t it = 0;
+  if (cfg_.sigle_partition_handling_path == kHandleWithUffdioCopy) {
+    // Copy all pages for all partitions here all together.
+    for (auto const &[p_ptr, p_size] : userfaultfd_destination_partitions_) {
       uffdio_copy.src = reinterpret_cast<uint64_t>(
-          std::get<0>(userfaultfd_partitions_[userfaultfd_it_]));
-      uffdio_copy.dst = msg.arg.pagefault.address;
-      uffdio_copy.len = std::get<1>(userfaultfd_partitions_[userfaultfd_it_]);
+          std::get<0>(userfaultfd_source_partitions_[it]));
+      uffdio_copy.dst = reinterpret_cast<uint64_t>(p_ptr);
+      uffdio_copy.len = p_size;
       uffdio_copy.mode = 0;
       uffdio_copy.copy = 0;
       if (ioctl(uffd, UFFDIO_COPY, &uffdio_copy) == -1) {
         RLOG(0) << "ioctl-UFFDIO_COPY error.";
         return;
       }
-    } else {
-      uffdio_continue.range.start = msg.arg.pagefault.address;
-      uffdio_continue.range.len =
-          std::get<1>(userfaultfd_partitions_[userfaultfd_it_]);
+      ++it;
+    }
+  } else {
+    for (auto const &[p_ptr, p_size] : userfaultfd_destination_partitions_) {
+      uffdio_continue.range.start = reinterpret_cast<uint64_t>(p_ptr);
+      uffdio_continue.range.len = p_size;
       uffdio_continue.mode = 0;
       if (ioctl(uffd, UFFDIO_CONTINUE, &uffdio_continue) == -1) {
         RLOG(0) << "ioctl-UFFDIO_CONTINUE error.";
         return;
       }
+      ++it;
     }
-
-    if (userfaultfd_it_ == userfaultfd_total_pages_to_install_ - 1) {
-      RLOG(1) << "Terminating userfaultfd thread.";
-      return;
-    }
-
-    ++userfaultfd_it_;
   }
+
+  RLOG(1) << "Terminating userfaultfd thread.";
+  return;
 }
 
-int MemoryRestorator::InstallAllPages(
-    size_t size, const MemoryPartitions &partitions,
-    const MemoryPartitions &decompressed_partitions) {
-  auto mem = std::get<0>(partitions.front());
+int MemoryRestorator::InstallAllPages(size_t size,
+                                      const MemoryPartitions &dst_partitions,
+                                      const MemoryPartitions &src_partitions) {
+  auto mem = std::get<0>(dst_partitions.front());
 
   // Create and enable userfaultfd object.
   long uffd = syscall(SYS_userfaultfd, O_CLOEXEC | O_NONBLOCK);
@@ -871,19 +873,16 @@ int MemoryRestorator::InstallAllPages(
       std::thread(&MemoryRestorator::fault_handler_thread, this, (void *)uffd);
 
   // Install all partitions via userfaultfd by touching them.
-  RLOG(1) << "Total partitions to install: " << partitions.size();
-  userfaultfd_total_pages_to_install_ = partitions.size();
-  userfaultfd_partitions_ = decompressed_partitions;
-  userfaultfd_it_ = 0;
-  for (auto const &[p_ptr, p_size] : partitions) {
-    assert(p_size % page_size_ == 0);
-    volatile uint8_t *partition_addr = p_ptr;
-    *partition_addr;
-  }
-  t.join();
+  RLOG(1) << "Total partitions to install: " << dst_partitions.size();
+  userfaultfd_source_partitions_ = src_partitions;
+  userfaultfd_destination_partitions_ = dst_partitions;
 
-  assert(userfaultfd_it_ == userfaultfd_total_pages_to_install_ - 1);
-  RLOG(1) << "Installed partitions: " << userfaultfd_it_ + 1;
+  // Trig page fault for installation.
+  volatile uint8_t *partition_addr = std::get<0>(dst_partitions.front());
+  *partition_addr;
+
+  // Wait until all pages are installed.
+  t.join();
 
   // Unregister memory from userfaultfd to allow the VM to continue with its
   // native page fault handling on fresh pages.
