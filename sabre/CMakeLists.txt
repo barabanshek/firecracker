@@ -12,8 +12,16 @@ add_definitions(-fstack-protector -fPIE -fPIC)
 add_definitions(-Wno-unused-function)
 add_definitions(-D_FORTIFY_SOURCE=2)
 
-# Stuff.
+# Stuff
 find_package (gflags REQUIRED)
+
+# For testing
+include(FetchContent)
+FetchContent_Declare(
+  googletest
+  URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+)
+FetchContent_MakeAvailable(googletest)
 
 # C++ library
 add_library(memory_restorator memory_restorator.cc reap_recorder.cc)
@@ -25,10 +33,19 @@ target_link_libraries(memory_restorator qpl dl gflags)
 add_library(memory_restorator-c memory_restorator-c.cc)
 target_link_libraries(memory_restorator-c memory_restorator)
 
-#
+# Demo
 add_executable(memory_restorator_demo memory_restorator_demo.cc)
 target_link_libraries(memory_restorator_demo memory_restorator gflags)
 
 # Microbenchmark
 add_executable(memory_restoration_micro microbenchmark.cc)
 target_link_libraries(memory_restoration_micro PUBLIC benchmark memory_restorator)
+
+# Tests
+add_executable(memory_restorator_test memory_restorator_tests.cc)
+target_link_libraries(memory_restorator_test GTest::gtest_main memory_restorator)
+
+enable_testing()
+
+include(GoogleTest)
+gtest_discover_tests(memory_restorator_test)
