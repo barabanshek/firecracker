@@ -528,6 +528,13 @@ int MemoryRestorator::RestoreFromSnapshot(
     snapshot_file_size = static_cast<size_t>(lseek(snapshot_fd, 0L, SEEK_END));
     lseek(snapshot_fd, 0L, SEEK_SET);
 
+    // Advise sequential access to the snapshot file by IAA hardware.
+    if (posix_fadvise(snapshot_fd, 0x00, snapshot_file_size,
+                      POSIX_FADV_SEQUENTIAL)) {
+      RLOG(0) << "Error during posix_fadvise." << std::endl;
+      return -1;
+    }
+
     // Mmap file.
     src =
         utils::m_mmap::allocate(snapshot_file_size, snapshot_fd, false, false);
