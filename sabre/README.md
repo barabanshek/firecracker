@@ -2,7 +2,7 @@
 
 Implementation of Sabre plugin for Firecracker described in the paper ["Sabre: Improving Memory Prefetching in Serverless MicroVMs with Near-Memory Hardware-Accelerated Compression"]().
 
-The full diff: `git diff 5326773`.
+The plugin is exposed to Firecracker codebase via Rust FFI through a se tof small changes in the original Firecracker's codebase. The full diff: `git diff 5326773`.
 
 ## Dependencies
 * docker
