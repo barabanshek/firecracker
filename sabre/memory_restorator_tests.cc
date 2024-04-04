@@ -25,101 +25,13 @@ protected:
             << (qpl_exec_path == qpl_path_hardware ? "hardware" : "software")
             << " execution path.";
 
-    acc::MemoryRestorator::MemoryRestoratotConfig cfg_scattered_dynamic = {
-        .execution_path = qpl_exec_path,
-        .partition_hanlding_path =
-            acc::MemoryRestorator::kHandleAsScatteredPartitions,
-        .scattered_partition_handling_path =
-            acc::MemoryRestorator::kDoDynamicHuffmanForScatteredPartitions,
-        .sigle_partition_handling_path =
-            acc::MemoryRestorator::kHandleWithUffdioCopy,
-        .restored_memory_owner = acc::MemoryRestorator::kMemoryRestorator,
-        .max_hardware_jobs = 1,
-        .passthrough = false};
-
-    acc::MemoryRestorator::MemoryRestoratotConfig cfg_scattered_static = {
-        .execution_path = qpl_exec_path,
-        .partition_hanlding_path =
-            acc::MemoryRestorator::kHandleAsScatteredPartitions,
-        .scattered_partition_handling_path =
-            acc::MemoryRestorator::kDoStaticHuffmanForScatteredPartitions,
-        .sigle_partition_handling_path =
-            acc::MemoryRestorator::kHandleWithUffdioCopy,
-        .restored_memory_owner = acc::MemoryRestorator::kMemoryRestorator,
-        .max_hardware_jobs = 1,
-        .passthrough = false};
-
-    acc::MemoryRestorator::MemoryRestoratotConfig cfg_single_uffdiocopy = {
-        .execution_path = qpl_exec_path,
-        .partition_hanlding_path =
-            acc::MemoryRestorator::kHandleAsSinglePartition,
-        .scattered_partition_handling_path =
-            acc::MemoryRestorator::kDoDynamicHuffmanForScatteredPartitions,
-        .sigle_partition_handling_path =
-            acc::MemoryRestorator::kHandleWithUffdioCopy,
-        .restored_memory_owner = acc::MemoryRestorator::kMemoryRestorator,
-        .max_hardware_jobs = 1,
-        .passthrough = false};
-
-    acc::MemoryRestorator::MemoryRestoratotConfig
-        cfg_scattered_static_app_owner = {
-            .execution_path = qpl_exec_path,
-            .partition_hanlding_path =
-                acc::MemoryRestorator::kHandleAsScatteredPartitions,
-            .scattered_partition_handling_path =
-                acc::MemoryRestorator::kDoStaticHuffmanForScatteredPartitions,
-            .sigle_partition_handling_path =
-                acc::MemoryRestorator::kHandleWithUffdioCopy,
-            .restored_memory_owner = acc::MemoryRestorator::kUserApplication,
-            .max_hardware_jobs = 1,
-            .passthrough = false};
-
-    acc::MemoryRestorator::MemoryRestoratotConfig
-        cfg_single_uffdiocopy_app_owner = {
-            .execution_path = qpl_exec_path,
-            .partition_hanlding_path =
-                acc::MemoryRestorator::kHandleAsSinglePartition,
-            .scattered_partition_handling_path =
-                acc::MemoryRestorator::kDoStaticHuffmanForScatteredPartitions,
-            .sigle_partition_handling_path =
-                acc::MemoryRestorator::kHandleWithUffdioCopy,
-            .restored_memory_owner = acc::MemoryRestorator::kUserApplication,
-            .max_hardware_jobs = 1,
-            .passthrough = false};
-
-    acc::MemoryRestorator::MemoryRestoratotConfig cfg_single_passthrough = {
-        .execution_path = qpl_exec_path,
-        .partition_hanlding_path =
-            acc::MemoryRestorator::kHandleAsSinglePartition,
-        .scattered_partition_handling_path =
-            acc::MemoryRestorator::kDoDynamicHuffmanForScatteredPartitions,
-        .sigle_partition_handling_path =
-            acc::MemoryRestorator::kHandleWithUffdioCopy,
-        .restored_memory_owner = acc::MemoryRestorator::kUserApplication,
-        .max_hardware_jobs = 1,
-        .passthrough = true};
-
-    memory_restorator_scattered_dynamic =
-        std::unique_ptr<acc::MemoryRestorator>(
-            new acc::MemoryRestorator(cfg_scattered_dynamic, "test", nullptr));
-
-    memory_restorator_scattered_static = std::unique_ptr<acc::MemoryRestorator>(
-        new acc::MemoryRestorator(cfg_scattered_static, "test", nullptr));
-
-    memory_restorator_single_uffdiocopy =
-        std::unique_ptr<acc::MemoryRestorator>(
-            new acc::MemoryRestorator(cfg_single_uffdiocopy, "test", nullptr));
-
-    memory_restorator_scattered_static_app_owner =
-        std::unique_ptr<acc::MemoryRestorator>(new acc::MemoryRestorator(
-            cfg_scattered_static_app_owner, "test", nullptr));
-
-    memory_restorator_single_uffdiocopy_app_owner =
-        std::unique_ptr<acc::MemoryRestorator>(new acc::MemoryRestorator(
-            cfg_single_uffdiocopy_app_owner, "test", nullptr));
-
-    memory_restorator_passthrough = std::unique_ptr<acc::MemoryRestorator>(
-        new acc::MemoryRestorator(cfg_single_passthrough, "test", nullptr));
+    cfg_scattered_dynamic.execution_path = qpl_exec_path;
+    cfg_scattered_static.execution_path = qpl_exec_path;
+    cfg_single_uffdiocopy.execution_path = qpl_exec_path;
+    cfg_scattered_static_app_owner.execution_path = qpl_exec_path;
+    cfg_single_uffdiocopy_app_owner.execution_path = qpl_exec_path;
+    cfg_single_passthrough.execution_path = qpl_exec_path;
+    cfg_scattered_static_multijob.execution_path = qpl_exec_path;
   }
 
   ~MemoryRestoratorTest() {}
@@ -138,6 +50,7 @@ protected:
     // Create memory partitions.
     auto true_entropy =
         init_rand_memory(memory_buffer.get(), mem_size, compressability);
+    (void)true_entropy;
 
     acc::MemoryRestorator::MemoryPartitions memory_gen;
     std::uniform_int_distribution<size_t> generator_uniform(1, mem_size - 1);
@@ -186,7 +99,7 @@ protected:
       uint16_t sparsity, int offset,
       acc::MemoryRestorator::MemoryPartitions &partitions) const {
     size_t num_pages = std::ceil(mem_size / sys::kPageSize);
-    for (int page_num = 0; page_num < num_pages; page_num++) {
+    for (size_t page_num = 0; page_num < num_pages; page_num++) {
       if (page_num % sparsity == offset) {
         auto p_ptr = memory_buffer.get() + page_num * sys::kPageSize;
         partitions.push_back(std::make_tuple(p_ptr, sys::kPageSize));
@@ -195,27 +108,28 @@ protected:
   }
 
   // Main testing function.
-  void
-  makeAndRestoreSnapshot(acc::MemoryRestorator *memory_restorator,
-                         const acc::MemoryRestorator::MemoryPartitions &memory,
-                         size_t mem_size, bool app_owner = false) const {
+  void makeAndRestoreSnapshot(
+      const acc::MemoryRestorator::MemoryRestoratotConfig &cfg,
+      const acc::MemoryRestorator::MemoryPartitions &memory, size_t mem_size,
+      bool app_owner = false) const {
     auto restored_memory_buffer = utils::m_mmap::nil;
     if (app_owner)
       restored_memory_buffer = utils::m_mmap::allocate(mem_size);
 
     // Init memory restorator.
-    EXPECT_TRUE(0 == memory_restorator->Init());
+    acc::MemoryRestorator memory_restorator(cfg, "test", nullptr);
+    EXPECT_TRUE(0 == memory_restorator.Init());
 
     // Make a snapshot.
-    EXPECT_TRUE(0 == memory_restorator->MakeSnapshot(
+    EXPECT_TRUE(0 == memory_restorator.MakeSnapshot(
                          memory, reinterpret_cast<uint64_t>(
                                      std::get<0>(memory.front()))));
 
     // Drop snapshot caches.
-    EXPECT_TRUE(0 == memory_restorator->DropCaches(true));
+    EXPECT_TRUE(0 == memory_restorator.DropCaches(true));
 
     // Restore from snapshot.
-    EXPECT_TRUE(0 == memory_restorator->RestoreFromSnapshot(
+    EXPECT_TRUE(0 == memory_restorator.RestoreFromSnapshot(
                          restored_memory_buffer, mem_size, nullptr));
 
     // Compare results.
@@ -230,15 +144,91 @@ protected:
     }
   }
 
-  // Memory restorators under test.
-  std::unique_ptr<acc::MemoryRestorator> memory_restorator_scattered_dynamic;
-  std::unique_ptr<acc::MemoryRestorator> memory_restorator_scattered_static;
-  std::unique_ptr<acc::MemoryRestorator> memory_restorator_single_uffdiocopy;
-  std::unique_ptr<acc::MemoryRestorator>
-      memory_restorator_scattered_static_app_owner;
-  std::unique_ptr<acc::MemoryRestorator>
-      memory_restorator_single_uffdiocopy_app_owner;
-  std::unique_ptr<acc::MemoryRestorator> memory_restorator_passthrough;
+  // Configs.
+  acc::MemoryRestorator::MemoryRestoratotConfig cfg_scattered_dynamic = {
+      .execution_path = qpl_path_hardware,
+      .partition_hanlding_path =
+          acc::MemoryRestorator::kHandleAsScatteredPartitions,
+      .sigle_partition_handling_path =
+          acc::MemoryRestorator::kHandleWithUffdioCopy,
+      .scattered_partition_handling_path =
+          acc::MemoryRestorator::kDoDynamicHuffmanForScatteredPartitions,
+      .restored_memory_owner = acc::MemoryRestorator::kMemoryRestorator,
+      .max_hardware_jobs = 1,
+      .passthrough = false};
+
+  acc::MemoryRestorator::MemoryRestoratotConfig cfg_scattered_static = {
+      .execution_path = qpl_path_hardware,
+      .partition_hanlding_path =
+          acc::MemoryRestorator::kHandleAsScatteredPartitions,
+      .sigle_partition_handling_path =
+          acc::MemoryRestorator::kHandleWithUffdioCopy,
+      .scattered_partition_handling_path =
+          acc::MemoryRestorator::kDoStaticHuffmanForScatteredPartitions,
+      .restored_memory_owner = acc::MemoryRestorator::kMemoryRestorator,
+      .max_hardware_jobs = 1,
+      .passthrough = false};
+
+  acc::MemoryRestorator::MemoryRestoratotConfig cfg_single_uffdiocopy = {
+      .execution_path = qpl_path_hardware,
+      .partition_hanlding_path =
+          acc::MemoryRestorator::kHandleAsSinglePartition,
+      .sigle_partition_handling_path =
+          acc::MemoryRestorator::kHandleWithUffdioCopy,
+      .scattered_partition_handling_path =
+          acc::MemoryRestorator::kDoDynamicHuffmanForScatteredPartitions,
+      .restored_memory_owner = acc::MemoryRestorator::kMemoryRestorator,
+      .max_hardware_jobs = 1,
+      .passthrough = false};
+
+  acc::MemoryRestorator::MemoryRestoratotConfig cfg_scattered_static_app_owner =
+      {.execution_path = qpl_path_hardware,
+       .partition_hanlding_path =
+           acc::MemoryRestorator::kHandleAsScatteredPartitions,
+       .sigle_partition_handling_path =
+           acc::MemoryRestorator::kHandleWithUffdioCopy,
+       .scattered_partition_handling_path =
+           acc::MemoryRestorator::kDoStaticHuffmanForScatteredPartitions,
+       .restored_memory_owner = acc::MemoryRestorator::kUserApplication,
+       .max_hardware_jobs = 1,
+       .passthrough = false};
+
+  acc::MemoryRestorator::MemoryRestoratotConfig
+      cfg_single_uffdiocopy_app_owner = {
+          .execution_path = qpl_path_hardware,
+          .partition_hanlding_path =
+              acc::MemoryRestorator::kHandleAsSinglePartition,
+          .sigle_partition_handling_path =
+              acc::MemoryRestorator::kHandleWithUffdioCopy,
+          .scattered_partition_handling_path =
+              acc::MemoryRestorator::kDoStaticHuffmanForScatteredPartitions,
+          .restored_memory_owner = acc::MemoryRestorator::kUserApplication,
+          .max_hardware_jobs = 1,
+          .passthrough = false};
+
+  acc::MemoryRestorator::MemoryRestoratotConfig cfg_single_passthrough = {
+      .execution_path = qpl_path_hardware,
+      .partition_hanlding_path =
+          acc::MemoryRestorator::kHandleAsSinglePartition,
+      .sigle_partition_handling_path =
+          acc::MemoryRestorator::kHandleWithUffdioCopy,
+      .scattered_partition_handling_path =
+          acc::MemoryRestorator::kDoDynamicHuffmanForScatteredPartitions,
+      .restored_memory_owner = acc::MemoryRestorator::kUserApplication,
+      .max_hardware_jobs = 1,
+      .passthrough = true};
+
+  acc::MemoryRestorator::MemoryRestoratotConfig cfg_scattered_static_multijob =
+      {.execution_path = qpl_path_hardware,
+       .partition_hanlding_path =
+           acc::MemoryRestorator::kHandleAsScatteredPartitions,
+       .sigle_partition_handling_path =
+           acc::MemoryRestorator::kHandleWithUffdioCopy,
+       .scattered_partition_handling_path =
+           acc::MemoryRestorator::kDoStaticHuffmanForScatteredPartitions,
+       .restored_memory_owner = acc::MemoryRestorator::kMemoryRestorator,
+       .max_hardware_jobs = 4,
+       .passthrough = false};
 };
 
 // Common defines
@@ -256,136 +246,149 @@ protected:
 TEST_F(MemoryRestoratorTest, RandomPartitions_ScatteredDynamic) {
   MEMBUF_256
   initRandomPartitions(memory_buffer, mem_size, 128, 100, memory_partitions);
-  makeAndRestoreSnapshot(this->memory_restorator_scattered_dynamic.get(),
-                         memory_partitions, mem_size);
+  makeAndRestoreSnapshot(this->cfg_scattered_dynamic, memory_partitions,
+                         mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, RandomPartitions_ScatteredStatic) {
   MEMBUF_256
   initRandomPartitions(memory_buffer, mem_size, 128, 100, memory_partitions);
-  makeAndRestoreSnapshot(this->memory_restorator_scattered_static.get(),
-                         memory_partitions, mem_size);
+  makeAndRestoreSnapshot(this->cfg_scattered_static, memory_partitions,
+                         mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, RandomPartitions_ScatteredStaticCompressible) {
   MEMBUF_256
   initRandomPartitions(memory_buffer, mem_size, 128, 5, memory_partitions);
-  makeAndRestoreSnapshot(this->memory_restorator_scattered_static.get(),
-                         memory_partitions, mem_size);
+  makeAndRestoreSnapshot(this->cfg_scattered_static, memory_partitions,
+                         mem_size);
 }
 
 TEST_F(MemoryRestoratorTest,
        RandomPartitions_ScatteredStaticCompressibleHugeMemory) {
   MEMBUF_1024
   initRandomPartitions(memory_buffer, mem_size, 128, 5, memory_partitions);
-  makeAndRestoreSnapshot(this->memory_restorator_scattered_static.get(),
-                         memory_partitions, mem_size);
+  makeAndRestoreSnapshot(this->cfg_scattered_static, memory_partitions,
+                         mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, RandomPartitions_SingleUffdiocopy) {
   MEMBUF_256
   initRandomPartitions(memory_buffer, mem_size, 128, 100, memory_partitions);
-  makeAndRestoreSnapshot(this->memory_restorator_single_uffdiocopy.get(),
-                         memory_partitions, mem_size);
+  makeAndRestoreSnapshot(this->cfg_single_uffdiocopy, memory_partitions,
+                         mem_size);
 }
 
 TEST_F(MemoryRestoratorTest,
        RandomPartitions_SingleUffdiocopyCompressibleHugeMemory) {
   MEMBUF_1024
   initRandomPartitions(memory_buffer, mem_size, 128, 5, memory_partitions);
-  makeAndRestoreSnapshot(this->memory_restorator_single_uffdiocopy.get(),
-                         memory_partitions, mem_size);
+  makeAndRestoreSnapshot(this->cfg_single_uffdiocopy, memory_partitions,
+                         mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, SparsePartitions_ScatteredDynamic) {
   MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 10000, 0, memory_partitions);
-  makeAndRestoreSnapshot(this->memory_restorator_scattered_dynamic.get(),
-                         memory_partitions, mem_size);
+  makeAndRestoreSnapshot(this->cfg_scattered_dynamic, memory_partitions,
+                         mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, SparsePartitions_ScatteredStatic) {
   MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 10000, 0, memory_partitions);
-  makeAndRestoreSnapshot(this->memory_restorator_scattered_static.get(),
-                         memory_partitions, mem_size);
+  makeAndRestoreSnapshot(this->cfg_scattered_static, memory_partitions,
+                         mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, SparsePartitions_SingleUffdiocopy) {
   MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 10000, 0, memory_partitions);
-  makeAndRestoreSnapshot(this->memory_restorator_single_uffdiocopy.get(),
-                         memory_partitions, mem_size);
+  makeAndRestoreSnapshot(this->cfg_single_uffdiocopy, memory_partitions,
+                         mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, EveryOtherPage_ScatteredDynamic) {
   MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 2, 0, memory_partitions);
-  makeAndRestoreSnapshot(this->memory_restorator_scattered_dynamic.get(),
-                         memory_partitions, mem_size);
+  makeAndRestoreSnapshot(this->cfg_scattered_dynamic, memory_partitions,
+                         mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, EveryOtherPage_ScatteredStatic) {
   MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 2, 0, memory_partitions);
-  makeAndRestoreSnapshot(this->memory_restorator_scattered_static.get(),
-                         memory_partitions, mem_size);
+  makeAndRestoreSnapshot(this->cfg_scattered_static, memory_partitions,
+                         mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, EveryOtherPage_SingleUffdiocopy) {
   MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 2, 0, memory_partitions);
-  makeAndRestoreSnapshot(this->memory_restorator_single_uffdiocopy.get(),
-                         memory_partitions, mem_size);
+  makeAndRestoreSnapshot(this->cfg_single_uffdiocopy, memory_partitions,
+                         mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, EveryOtherPage_ScatteredDynamicNonZeroOffset) {
   MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 2, 1, memory_partitions);
-  makeAndRestoreSnapshot(this->memory_restorator_scattered_dynamic.get(),
-                         memory_partitions, mem_size);
+  makeAndRestoreSnapshot(this->cfg_scattered_dynamic, memory_partitions,
+                         mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, EveryOtherPage_ScatteredStaticNonZeroOffset) {
   MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 2, 1, memory_partitions);
-  makeAndRestoreSnapshot(this->memory_restorator_scattered_static.get(),
-                         memory_partitions, mem_size);
+  makeAndRestoreSnapshot(this->cfg_scattered_static, memory_partitions,
+                         mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, EveryOtherPage_SingleUffdiocopyNonZeroOffset) {
   MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 2, 1, memory_partitions);
-  makeAndRestoreSnapshot(this->memory_restorator_single_uffdiocopy.get(),
-                         memory_partitions, mem_size);
+  makeAndRestoreSnapshot(this->cfg_single_uffdiocopy, memory_partitions,
+                         mem_size);
 }
 
 TEST_F(MemoryRestoratorTest, ScatteredStaticAppOwner) {
   MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 2, 0, memory_partitions);
-  makeAndRestoreSnapshot(
-      this->memory_restorator_scattered_static_app_owner.get(),
-      memory_partitions, mem_size, true);
+  makeAndRestoreSnapshot(this->cfg_scattered_static_app_owner,
+                         memory_partitions, mem_size, true);
 }
 
 TEST_F(MemoryRestoratorTest, SingleUffdiocopyAppOwner) {
   MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 2, 0, memory_partitions);
-  makeAndRestoreSnapshot(
-      this->memory_restorator_single_uffdiocopy_app_owner.get(),
-      memory_partitions, mem_size, true);
+  makeAndRestoreSnapshot(this->cfg_single_uffdiocopy_app_owner,
+                         memory_partitions, mem_size, true);
 }
 
 TEST_F(MemoryRestoratorTest, PassthroughStartingFromZeroPageOffset) {
   MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 2, 0, memory_partitions);
-  makeAndRestoreSnapshot(this->memory_restorator_passthrough.get(),
-                         memory_partitions, mem_size, true);
+  makeAndRestoreSnapshot(this->cfg_single_passthrough, memory_partitions,
+                         mem_size, true);
 }
 
 TEST_F(MemoryRestoratorTest, PassthroughStartingFromNonZeroPageOffset) {
   MEMBUF_256
   initSparsePartitions(memory_buffer, mem_size, 2, 1, memory_partitions);
-  makeAndRestoreSnapshot(this->memory_restorator_passthrough.get(),
-                         memory_partitions, mem_size, true);
+  makeAndRestoreSnapshot(this->cfg_single_passthrough, memory_partitions,
+                         mem_size, true);
+}
+
+TEST_F(MemoryRestoratorTest, EveryOtherPage_ScatteredStaticMultiJob) {
+  MEMBUF_256
+  initSparsePartitions(memory_buffer, mem_size, 2, 0, memory_partitions);
+  makeAndRestoreSnapshot(this->cfg_scattered_static_multijob, memory_partitions,
+                         mem_size);
+}
+
+TEST_F(MemoryRestoratorTest,
+       EveryOtherPage_ScatteredStaticMultiJobNonZeroOffset) {
+  MEMBUF_256
+  initSparsePartitions(memory_buffer, mem_size, 2, 1, memory_partitions);
+  makeAndRestoreSnapshot(this->cfg_scattered_static_multijob, memory_partitions,
+                         mem_size);
 }
