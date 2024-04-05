@@ -21,9 +21,10 @@ protected:
     if (std::getenv("SABRE_TEST_SOFTWARE_PATH"))
       qpl_exec_path = qpl_path_software;
 
-    RLOG(1) << "Running tests with "
-            << (qpl_exec_path == qpl_path_hardware ? "hardware" : "software")
-            << " execution path.";
+    RLOG(LOG_INFO) << "Running tests with "
+                   << (qpl_exec_path == qpl_path_hardware ? "hardware"
+                                                          : "software")
+                   << " execution path.";
 
     cfg_scattered_dynamic.execution_path = qpl_exec_path;
     cfg_scattered_static.execution_path = qpl_exec_path;

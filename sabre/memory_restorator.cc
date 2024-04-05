@@ -93,7 +93,7 @@ int MemoryRestorator::FreeQpl() {
 
 int MemoryRestorator::Init() {
   if (InitQpl()) {
-    RLOG(0) << "Failed to init QPL.";
+    RLOG(LOG_ERROR) << "Failed to init QPL.";
     return -1;
   }
 
@@ -109,7 +109,7 @@ int MemoryRestorator::ComputeHuffmanTables(
       qpl_deflate_huffman_table_create(combined_table_type, cfg_.execution_path,
                                        DEFAULT_ALLOCATOR_C, c_huffman_table);
   if (status != QPL_STS_OK) {
-    RLOG(0) << "Failed to allocate Huffman tables";
+    RLOG(LOG_ERROR) << "Failed to allocate Huffman tables";
     return -1;
   }
 
@@ -119,7 +119,7 @@ int MemoryRestorator::ComputeHuffmanTables(
                                          &histogram, qpl_default_level,
                                          cfg_.execution_path);
   if (status != QPL_STS_OK) {
-    RLOG(0) << "Failed to gather statistics.";
+    RLOG(LOG_ERROR) << "Failed to gather statistics.";
     qpl_huffman_table_destroy(*c_huffman_table);
     return -1;
   }
@@ -127,7 +127,7 @@ int MemoryRestorator::ComputeHuffmanTables(
   // Populate Huffman tabes with the statistics.
   status = qpl_huffman_table_init_with_histogram(*c_huffman_table, &histogram);
   if (status != QPL_STS_OK) {
-    RLOG(0) << "Failed to populate the Huffman tabels.";
+    RLOG(LOG_ERROR) << "Failed to populate the Huffman tabels.";
     qpl_huffman_table_destroy(*c_huffman_table);
     return -1;
   }
@@ -140,7 +140,7 @@ int MemoryRestorator::CompressSingleChunk(qpl_huffman_table_t c_huffman_table,
                                           uint8_t *dst, size_t *dst_size,
                                           bool first, bool last) const {
   if (!qpl_initialized_) {
-    RLOG(0) << "QPL is not initialized!";
+    RLOG(LOG_ERROR) << "QPL is not initialized!";
     return -1;
   }
   qpl_job *job;
@@ -176,7 +176,7 @@ int MemoryRestorator::CompressSingleChunk(qpl_huffman_table_t c_huffman_table,
   // Execute compression operation.
   qpl_status status = qpl_execute_job(job);
   if (status != QPL_STS_OK) {
-    RLOG(0) << "An error " << status << " acquired during compression.";
+    RLOG(LOG_ERROR) << "An error " << status << " acquired during compression.";
     return -1;
   }
 
@@ -193,7 +193,7 @@ int MemoryRestorator::DecompressSingleChunk(const uint8_t *src, size_t src_size,
                                             size_t *dst_actual_size,
                                             bool blocking) const {
   if (!qpl_initialized_) {
-    RLOG(0) << "QPL is not initialized!";
+    RLOG(LOG_ERROR) << "QPL is not initialized!";
     return -1;
   }
   qpl_job *job;
@@ -215,7 +215,7 @@ int MemoryRestorator::DecompressSingleChunk(const uint8_t *src, size_t src_size,
   if (blocking) {
     qpl_status status = qpl_execute_job(job);
     if (status != QPL_STS_OK) {
-      RLOG(0) << "Error while decompression occurred: " << status;
+      RLOG(LOG_ERROR) << "Error while decompression occurred: " << status;
       return -1;
     }
 
@@ -226,8 +226,9 @@ int MemoryRestorator::DecompressSingleChunk(const uint8_t *src, size_t src_size,
   } else {
     qpl_status status = qpl_submit_job(job);
     if (status != QPL_STS_OK) {
-      RLOG(0) << "Error while submitting non blocking decompression occured: "
-              << status;
+      RLOG(LOG_ERROR)
+          << "Error while submitting non blocking decompression occured: "
+          << status;
       return -1;
     }
     return job_id;
@@ -245,7 +246,7 @@ int MemoryRestorator::MakeSnapshot(
   std::vector<size_t> dst_partition_sizes;
   auto dst = utils::m_malloc::allocate(src_total_size);
   if (src.get() == nullptr || dst.get() == nullptr) {
-    RLOG(0) << "Failed to allocate memory.";
+    RLOG(LOG_ERROR) << "Failed to allocate memory.";
     return -1;
   }
 
@@ -267,7 +268,7 @@ int MemoryRestorator::MakeSnapshot(
           CompressSingleChunk(nullptr, src.get(), src_total_size, dst.get(),
                               &dst_compressed_total_size, true, true);
       if (ret) {
-        RLOG(0) << "An error acquired during compression.";
+        RLOG(LOG_ERROR) << "An error acquired during compression.";
         return -1;
       }
     } else {
@@ -276,7 +277,7 @@ int MemoryRestorator::MakeSnapshot(
       if (cfg_.scattered_partition_handling_path ==
           kDoStaticHuffmanForScatteredPartitions) {
         if (ComputeHuffmanTables(src.get(), src_total_size, &c_huffman_table)) {
-          RLOG(0) << "An error acquired during Huffman table compute.";
+          RLOG(LOG_ERROR) << "An error acquired during Huffman table compute.";
           return -1;
         }
       }
@@ -289,7 +290,7 @@ int MemoryRestorator::MakeSnapshot(
                                 dst.get() + dst_compressed_total_size,
                                 &compressed_size, p_id == 0,
                                 p_id == src_memory_partitions.size() - 1)) {
-          RLOG(0) << "An error acquired during compression.";
+          RLOG(LOG_ERROR) << "An error acquired during compression.";
           return -1;
         }
         dst_partition_sizes.push_back(compressed_size);
@@ -307,7 +308,7 @@ int MemoryRestorator::MakeSnapshot(
   int partition_info_fd =
       open(partition_info_filename.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0x666);
   if (partition_info_fd == -1) {
-    RLOG(0) << "Error during file open.";
+    RLOG(LOG_ERROR) << "Error during file open.";
     return -1;
   }
 
@@ -315,7 +316,7 @@ int MemoryRestorator::MakeSnapshot(
   uint64_t p_number = static_cast<uint64_t>(src_memory_partitions.size());
   if (write(partition_info_fd, &p_number, sizeof(p_number)) !=
       sizeof(p_number)) {
-    RLOG(0) << "Error during write.";
+    RLOG(LOG_ERROR) << "Error during write.";
     close(partition_info_fd);
     return -1;
   }
@@ -337,7 +338,7 @@ int MemoryRestorator::MakeSnapshot(
       p_info.compressed_size = dst_partition_sizes[i];
     if (write(partition_info_fd, &p_info, sizeof(PartitionInfo)) !=
         sizeof(PartitionInfo)) {
-      RLOG(0) << "Error during write.";
+      RLOG(LOG_ERROR) << "Error during write.";
       close(partition_info_fd);
       return -1;
     }
@@ -351,7 +352,7 @@ int MemoryRestorator::MakeSnapshot(
   int snapshot_fd =
       open(snapshot_filename.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0x666);
   if (snapshot_fd == -1) {
-    RLOG(0) << "Error during file open.";
+    RLOG(LOG_ERROR) << "Error during file open.";
     return -1;
   }
 
@@ -359,7 +360,7 @@ int MemoryRestorator::MakeSnapshot(
     if (write(snapshot_fd, cfg_.passthrough ? src.get() : dst.get(),
               dst_compressed_total_size) !=
         static_cast<ssize_t>(dst_compressed_total_size)) {
-      RLOG(0) << "Error during write.";
+      RLOG(LOG_ERROR) << "Error during write.";
       close(snapshot_fd);
       return -1;
     }
@@ -368,7 +369,7 @@ int MemoryRestorator::MakeSnapshot(
     if (write(snapshot_fd, cfg_.passthrough ? src.get() : dst.get(),
               dst_compressed_total_size) !=
         static_cast<ssize_t>(dst_compressed_total_size)) {
-      RLOG(0) << "Error during write.";
+      RLOG(LOG_ERROR) << "Error during write.";
       close(snapshot_fd);
       return -1;
     }
@@ -376,12 +377,13 @@ int MemoryRestorator::MakeSnapshot(
   fsync(snapshot_fd);
   close(snapshot_fd);
 
-  RLOG(1) << "Snapshot created:";
-  RLOG(1) << "    name: " << snapshot_filename_;
-  RLOG(1) << "    # of partitions: " << p_number;
-  RLOG(1) << "    original size (B): " << src_total_size;
-  RLOG(1) << "    compressed size (B): " << dst_compressed_total_size << "(x"
-          << 1.0 * src_total_size / dst_compressed_total_size << ")";
+  RLOG(LOG_INFO) << "Snapshot created:";
+  RLOG(LOG_INFO) << "    name: " << snapshot_filename_;
+  RLOG(LOG_INFO) << "    # of partitions: " << p_number;
+  RLOG(LOG_INFO) << "    original size (B): " << src_total_size;
+  RLOG(LOG_INFO) << "    compressed size (B): " << dst_compressed_total_size
+                 << "(x" << 1.0 * src_total_size / dst_compressed_total_size
+                 << ")";
 
   return 0;
 }
@@ -411,13 +413,13 @@ int MemoryRestorator::RestoreFromSnapshot(
   utils::m_mmap::Memory dst_mem_region;
   if (cfg_.restored_memory_owner == kUserApplication) {
     if (cfg_.sigle_partition_handling_path == kHandleWithUffdioContinue) {
-      RLOG(0) << "Memory owned by application can not be restored with "
-                 "UFFDIO_CONTINUE";
+      RLOG(LOG_ERROR) << "Memory owned by application can not be restored with "
+                         "UFFDIO_CONTINUE";
       return -1;
     }
     // Since user application own the memory, check that it is allocated.
     if (mem_region.get() == nullptr) {
-      RLOG(0) << "NULL memory is received from the owning application.";
+      RLOG(LOG_ERROR) << "NULL memory is received from the owning application.";
       return -1;
     }
 
@@ -425,12 +427,13 @@ int MemoryRestorator::RestoreFromSnapshot(
   } else {
     // Check that the pointer is null, so we can allocate memory here.
     if (mem_region.get() != nullptr) {
-      RLOG(0) << "Memory is already allocated";
+      RLOG(LOG_ERROR) << "Memory is already allocated";
       return -1;
     }
 
     if (cfg_.passthrough) {
-      RLOG(0) << "In passthrough mode, only application can own the memory.";
+      RLOG(LOG_ERROR)
+          << "In passthrough mode, only application can own the memory.";
       return -1;
     }
 
@@ -442,32 +445,34 @@ int MemoryRestorator::RestoreFromSnapshot(
       dst_mem_region = utils::m_mmap::shem_allocate(mem_region_size, &shem_fd_);
 
     if (dst_mem_region.get() == nullptr) {
-      RLOG(0) << "Failed to allocate destination memory region.";
+      RLOG(LOG_ERROR) << "Failed to allocate destination memory region.";
       return -1;
     }
   }
 
   metrics_.mmap_dst_mem =
       time_begin.GetScopeTimeStamp<std::chrono::microseconds>();
-  RLOG(1) << "Mmap destination memory, took: " << metrics_.mmap_dst_mem << "us";
+  RLOG(LOG_INFO) << "Mmap destination memory, took: " << metrics_.mmap_dst_mem
+                 << "us";
 
   // Read partition info.
   auto partition_info_filename =
       snapshot_filename_ + "." + kPartitionInfoFileNameSuffix;
   int partition_info_fd = open(partition_info_filename.c_str(), O_RDWR);
   if (partition_info_fd == -1) {
-    RLOG(0) << "Error during partition file open: " << partition_info_filename;
+    RLOG(LOG_ERROR) << "Error during partition file open: "
+                    << partition_info_filename;
     return -1;
   }
 
   uint64_t p_number = 0;
   if (read(partition_info_fd, &p_number, sizeof(p_number)) !=
       sizeof(p_number)) {
-    RLOG(0) << "Error during read.";
+    RLOG(LOG_ERROR) << "Error during read.";
     close(partition_info_fd);
     return -1;
   }
-  RLOG(1) << "Number of partitions: " << p_number;
+  RLOG(LOG_INFO) << "Number of partitions: " << p_number;
 
   MemoryPartitionsOffsetBased snapshot_memory_partitions;
   std::vector<std::tuple<uint64_t, uint64_t>> src_offset_size; // <offset, size>
@@ -477,7 +482,7 @@ int MemoryRestorator::RestoreFromSnapshot(
     PartitionInfo p_info;
     if (read(partition_info_fd, &p_info, sizeof(PartitionInfo)) !=
         sizeof(PartitionInfo)) {
-      RLOG(0) << "Error during read.";
+      RLOG(LOG_ERROR) << "Error during read.";
       close(partition_info_fd);
       return -1;
     }
@@ -489,9 +494,9 @@ int MemoryRestorator::RestoreFromSnapshot(
       p_offset += p_info.compressed_size;
     }
     total_decompress_size += p_info.original_size;
-    RLOG(2) << "    " << i << ": " << std::hex << p_info.original_offset << ", "
-            << std::dec << p_info.original_size << ", "
-            << p_info.compressed_size;
+    RLOG(LOG_VERBAL) << "    " << i << ": " << std::hex
+                     << p_info.original_offset << ", " << std::dec
+                     << p_info.original_size << ", " << p_info.compressed_size;
   }
   close(partition_info_fd);
 
@@ -501,8 +506,8 @@ int MemoryRestorator::RestoreFromSnapshot(
 
   metrics_.get_partition_info =
       time_begin.GetScopeTimeStamp<std::chrono::microseconds>();
-  RLOG(1) << "Get partition info, took: " << metrics_.get_partition_info
-          << "us";
+  RLOG(LOG_INFO) << "Get partition info, took: " << metrics_.get_partition_info
+                 << "us";
 
   if (src_offset_size.size() == 0) {
     if (!cfg_.passthrough)
@@ -522,7 +527,7 @@ int MemoryRestorator::RestoreFromSnapshot(
     // pre-faulting and/or pre-fetching.
     snapshot_fd = open(snapshot_filename.c_str(), O_RDWR);
     if (snapshot_fd == -1) {
-      RLOG(0) << "Error during file open.";
+      RLOG(LOG_ERROR) << "Error during file open.";
       return -1;
     }
     snapshot_file_size = static_cast<size_t>(lseek(snapshot_fd, 0L, SEEK_END));
@@ -531,7 +536,7 @@ int MemoryRestorator::RestoreFromSnapshot(
     // Advise sequential access to the snapshot file by IAA hardware.
     if (posix_fadvise(snapshot_fd, 0x00, snapshot_file_size,
                       POSIX_FADV_SEQUENTIAL)) {
-      RLOG(0) << "Error during posix_fadvise.";
+      RLOG(LOG_ERROR) << "Error during posix_fadvise.";
       return -1;
     }
 
@@ -539,7 +544,7 @@ int MemoryRestorator::RestoreFromSnapshot(
     src =
         utils::m_mmap::allocate(snapshot_file_size, snapshot_fd, false, false);
     if (src.get() == nullptr) {
-      RLOG(0) << "Failed to mmap file.";
+      RLOG(LOG_ERROR) << "Failed to mmap file.";
       close(snapshot_fd);
       return -1;
     }
@@ -548,7 +553,7 @@ int MemoryRestorator::RestoreFromSnapshot(
     // O_DIRECT.
     snapshot_fd = open(snapshot_filename.c_str(), O_RDWR | O_DIRECT);
     if (snapshot_fd == -1) {
-      RLOG(0) << "Error during file open.";
+      RLOG(LOG_ERROR) << "Error during file open.";
       return -1;
     }
     snapshot_file_size = static_cast<size_t>(lseek(snapshot_fd, 0L, SEEK_END));
@@ -558,15 +563,15 @@ int MemoryRestorator::RestoreFromSnapshot(
     src = utils::m_mmap::allocate(snapshot_file_size, -1, false, false);
     if (read(snapshot_fd, src.get(), snapshot_file_size) !=
         snapshot_file_size) {
-      RLOG(0) << "Failed to pre-fetch snapshot file.";
+      RLOG(LOG_ERROR) << "Failed to pre-fetch snapshot file.";
       return -1;
     }
   }
 
   metrics_.mmap_snapshot =
       time_begin.GetScopeTimeStamp<std::chrono::microseconds>();
-  RLOG(1) << "Mmap (and fetch if passthough) snapshot file, took: "
-          << metrics_.mmap_snapshot << "us";
+  RLOG(LOG_INFO) << "Mmap (and fetch if passthough) snapshot file, took: "
+                 << metrics_.mmap_snapshot << "us";
 
   if (cfg_.partition_hanlding_path == kHandleAsSinglePartition) {
     // We need to do the following:
@@ -588,24 +593,25 @@ int MemoryRestorator::RestoreFromSnapshot(
         // destination, so just allocate it.
         if (mem_pool_ != nullptr) {
           // If we have pre-allocated memory pool to use, go for it.
-          RLOG(1) << "Allocating decompression buffer from the memory pool";
+          RLOG(LOG_INFO)
+              << "Allocating decompression buffer from the memory pool";
           auto m_buff = GetMemoryFromMemPool(total_decompress_size);
           decompressed_memory.reset(m_buff);
           need_to_explicitly_release_decompressed_memory = true;
         } else {
-          RLOG(1) << "Allocating local private decompression buffer";
+          RLOG(LOG_INFO) << "Allocating local private decompression buffer";
           decompressed_memory =
               utils::m_mmap::allocate(total_decompress_size, -1, true, true);
         }
       } else {
         // We are going to use userfaultfd's CONTINUE mode, this memory must be
         // shared with the destination buffer via shem.
-        RLOG(1) << "Allocating shem backed shared decompression buffer";
+        RLOG(LOG_INFO) << "Allocating shem backed shared decompression buffer";
         decompressed_memory =
             utils::m_mmap::shem_allocate(total_decompress_size, &shem_fd_);
       }
       if (decompressed_memory.get() == nullptr) {
-        RLOG(0)
+        RLOG(LOG_ERROR)
             << "Failed to allocate memory for the decompression, requested: "
             << total_decompress_size << " B";
         close(snapshot_fd);
@@ -614,20 +620,20 @@ int MemoryRestorator::RestoreFromSnapshot(
 
       metrics_.mmap_decompression_buff =
           time_begin.GetScopeTimeStamp<std::chrono::microseconds>();
-      RLOG(1) << "Mmap decompression buffer, took: "
-              << metrics_.mmap_decompression_buff << " us";
+      RLOG(LOG_INFO) << "Mmap decompression buffer, took: "
+                     << metrics_.mmap_decompression_buff << " us";
 
       // Decompress.
       size_t actual_decompress_size = 0;
       if (DecompressSingleChunk(
               src.get(), snapshot_file_size, decompressed_memory.get(),
               total_decompress_size, &actual_decompress_size) == -1) {
-        RLOG(0) << "Error during decompression.";
+        RLOG(LOG_ERROR) << "Error during decompression.";
         close(snapshot_fd);
         return -1;
       }
       if (actual_decompress_size != total_decompress_size) {
-        RLOG(0) << "Decompressed data size missmatch.";
+        RLOG(LOG_ERROR) << "Decompressed data size missmatch.";
         close(snapshot_fd);
         return -1;
       }
@@ -639,15 +645,15 @@ int MemoryRestorator::RestoreFromSnapshot(
 
       metrics_.decompress =
           time_begin.GetScopeTimeStamp<std::chrono::microseconds>();
-      RLOG(1) << "Decompress, took: " << metrics_.decompress << " us";
+      RLOG(LOG_INFO) << "Decompress, took: " << metrics_.decompress << " us";
 
       // If in debug, compare partitions.
       if (original_partitions != nullptr) {
         if (ComparePartitions(*original_partitions,
                               memory_partitions_to_install) == false) {
-          RLOG(0) << "Missmatch in decompressed partitions.";
+          RLOG(LOG_ERROR) << "Missmatch in decompressed partitions.";
         }
-        RLOG(0) << "Decompressed partitions match original memory.";
+        RLOG(LOG_ERROR) << "Decompressed partitions match original memory.";
       }
     } else {
       AlignMemoryPartitions(src.get(), snapshot_memory_partitions,
@@ -657,28 +663,29 @@ int MemoryRestorator::RestoreFromSnapshot(
     // Install pages.
     if (InstallAllPages(mem_region_size, dst_memory_partitions,
                         memory_partitions_to_install)) {
-      RLOG(0) << "Failed to install pages.";
+      RLOG(LOG_ERROR) << "Failed to install pages.";
       close(snapshot_fd);
       return -1;
     }
 
     metrics_.install_pages =
         time_begin.GetScopeTimeStamp<std::chrono::microseconds>();
-    RLOG(1) << "Install pages, took: " << metrics_.install_pages << " us";
+    RLOG(LOG_INFO) << "Install pages, took: " << metrics_.install_pages
+                   << " us";
 
     // Release some memory.
     // TODO(Nikita): do it automatically!
     if (mem_pool_ != nullptr &&
         need_to_explicitly_release_decompressed_memory) {
       if (mem_pool_->ReturnMemory(decompressed_memory.get())) {
-        RLOG(1) << "Failed to return memory to mempool.";
+        RLOG(LOG_INFO) << "Failed to return memory to mempool.";
         close(snapshot_fd);
         return -1;
       }
     }
   } else {
     if (cfg_.passthrough) {
-      RLOG(0)
+      RLOG(LOG_ERROR)
           << "Only kHandleAsSinglePartition is allowed in passthrough mode.";
       return -1;
     }
@@ -700,7 +707,7 @@ int MemoryRestorator::RestoreFromSnapshot(
                                   std::get<1>(src_offset_size[i]), dst_ptr,
                                   dst_size, &actual_decompress_size,
                                   true) == -1) {
-          RLOG(0) << "Error during decompression of partition #" << i;
+          RLOG(LOG_ERROR) << "Error during decompression of partition #" << i;
           close(snapshot_fd);
           return -1;
         }
@@ -732,7 +739,8 @@ int MemoryRestorator::RestoreFromSnapshot(
             std::get<1>(src_offset_size[partition_i]), dst_ptr, dst_size,
             nullptr, false);
         if (job_id == -1) {
-          RLOG(0) << "Error during decompression of partition #" << partition_i;
+          RLOG(LOG_ERROR) << "Error during decompression of partition #"
+                          << partition_i;
           close(snapshot_fd);
           return -1;
         }
@@ -759,13 +767,13 @@ int MemoryRestorator::RestoreFromSnapshot(
 
     metrics_.decompress =
         time_begin.GetScopeTimeStamp<std::chrono::microseconds>();
-    RLOG(1) << "Decompress, took: " << metrics_.decompress << " us";
+    RLOG(LOG_INFO) << "Decompress, took: " << metrics_.decompress << " us";
   }
 
   metrics_.mem_restore_total =
       time_begin.GetAbsoluteTimeStamp<std::chrono::microseconds>();
-  RLOG(1) << "Memory restoration, took: " << metrics_.mem_restore_total
-          << " us";
+  RLOG(LOG_INFO) << "Memory restoration, took: " << metrics_.mem_restore_total
+                 << " us";
 
   mem_region = std::move(dst_mem_region);
   close(snapshot_fd);
@@ -784,18 +792,18 @@ void MemoryRestorator::fault_handler_thread(void *arg) {
   pollfd.events = POLLIN;
   int nready = poll(&pollfd, 1, -1);
   if (nready == -1) {
-    RLOG(0) << "uffd poll error.";
+    RLOG(LOG_ERROR) << "uffd poll error.";
     return;
   }
 
   ssize_t nread = read(uffd, &msg, sizeof(msg));
   if (nread == 0 || nread == -1) {
-    RLOG(0) << "Failed to read on uffd.";
+    RLOG(LOG_ERROR) << "Failed to read on uffd.";
     return;
   }
 
   if (msg.event != UFFD_EVENT_PAGEFAULT) {
-    RLOG(0) << "Unexpected event on userfaultfd.";
+    RLOG(LOG_ERROR) << "Unexpected event on userfaultfd.";
     return;
   }
 
@@ -813,7 +821,7 @@ void MemoryRestorator::fault_handler_thread(void *arg) {
       uffdio_copy.mode = 0;
       uffdio_copy.copy = 0;
       if (ioctl(uffd, UFFDIO_COPY, &uffdio_copy) == -1) {
-        RLOG(0) << "ioctl-UFFDIO_COPY error.";
+        RLOG(LOG_ERROR) << "ioctl-UFFDIO_COPY error.";
         return;
       }
       ++it;
@@ -824,14 +832,14 @@ void MemoryRestorator::fault_handler_thread(void *arg) {
       uffdio_continue.range.len = p_size;
       uffdio_continue.mode = 0;
       if (ioctl(uffd, UFFDIO_CONTINUE, &uffdio_continue) == -1) {
-        RLOG(0) << "ioctl-UFFDIO_CONTINUE error.";
+        RLOG(LOG_ERROR) << "ioctl-UFFDIO_CONTINUE error.";
         return;
       }
       ++it;
     }
   }
 
-  RLOG(1) << "Terminating userfaultfd thread.";
+  RLOG(LOG_INFO) << "Terminating userfaultfd thread.";
   return;
 }
 
@@ -843,7 +851,7 @@ int MemoryRestorator::InstallAllPages(size_t size,
   // Create and enable userfaultfd object.
   long uffd = syscall(SYS_userfaultfd, O_CLOEXEC | O_NONBLOCK);
   if (uffd == -1) {
-    RLOG(0) << "Failed to create and enable userfaultfd object.";
+    RLOG(LOG_ERROR) << "Failed to create and enable userfaultfd object.";
     return -1;
   }
 
@@ -853,15 +861,15 @@ int MemoryRestorator::InstallAllPages(size_t size,
   uffdio_api.api = UFFD_API;
   uffdio_api.features = 0;
   if (ioctl(uffd, UFFDIO_API, &uffdio_api) == -1) {
-    RLOG(0) << "ioctl-UFFDIO_API.";
+    RLOG(LOG_ERROR) << "ioctl-UFFDIO_API.";
     return -1;
   }
 
-  RLOG(2) << "uffdio_api.features: " << std::hex << uffdio_api.features
-          << std::dec << ", UFFD_FEATURE_MINOR_HUGETLBFS: "
-          << (uffdio_api.features & UFFD_FEATURE_MINOR_HUGETLBFS)
-          << ", UFFD_FEATURE_MINOR_SHMEM: "
-          << (uffdio_api.features & UFFD_FEATURE_MINOR_SHMEM);
+  RLOG(LOG_VERBAL) << "uffdio_api.features: " << std::hex << uffdio_api.features
+                   << std::dec << ", UFFD_FEATURE_MINOR_HUGETLBFS: "
+                   << (uffdio_api.features & UFFD_FEATURE_MINOR_HUGETLBFS)
+                   << ", UFFD_FEATURE_MINOR_SHMEM: "
+                   << (uffdio_api.features & UFFD_FEATURE_MINOR_SHMEM);
 
   // Register our memory with userfaultfd.
   uffdio_register.range.start = reinterpret_cast<uint64_t>(mem);
@@ -871,7 +879,7 @@ int MemoryRestorator::InstallAllPages(size_t size,
           ? UFFDIO_REGISTER_MODE_MISSING
           : UFFDIO_REGISTER_MODE_MINOR;
   if (ioctl(uffd, UFFDIO_REGISTER, &uffdio_register) == -1) {
-    RLOG(0) << "Failed to register memory with userfaultfd.";
+    RLOG(LOG_ERROR) << "Failed to register memory with userfaultfd.";
     return -1;
   }
 
@@ -880,7 +888,7 @@ int MemoryRestorator::InstallAllPages(size_t size,
       std::thread(&MemoryRestorator::fault_handler_thread, this, (void *)uffd);
 
   // Install all partitions via userfaultfd by touching them.
-  RLOG(1) << "Total partitions to install: " << dst_partitions.size();
+  RLOG(LOG_INFO) << "Total partitions to install: " << dst_partitions.size();
   userfaultfd_source_partitions_ = src_partitions;
   userfaultfd_destination_partitions_ = dst_partitions;
 
@@ -894,7 +902,7 @@ int MemoryRestorator::InstallAllPages(size_t size,
   // Unregister memory from userfaultfd to allow the VM to continue with its
   // native page fault handling on fresh pages.
   if (ioctl(uffd, UFFDIO_UNREGISTER, &uffdio_register) == -1) {
-    RLOG(0) << "Failed to unregister memory with userfaultfd.";
+    RLOG(LOG_ERROR) << "Failed to unregister memory with userfaultfd.";
     return -1;
   }
 
@@ -904,17 +912,20 @@ int MemoryRestorator::InstallAllPages(size_t size,
 bool MemoryRestorator::ComparePartitions(const MemoryPartitions &p1,
                                          const MemoryPartitions &p2) const {
   if (p1.size() != p2.size()) {
-    RLOG(0) << "ComparePartitions: missmatch in total number of partitions.";
+    RLOG(LOG_ERROR)
+        << "ComparePartitions: missmatch in total number of partitions.";
     return false;
   }
 
   for (size_t i = 0; i < p1.size(); ++i) {
     if (std::get<1>(p1[i]) != std::get<1>(p2[i])) {
-      RLOG(0) << "ComparePartitions: missmatch in size of partition: " << i;
+      RLOG(LOG_ERROR) << "ComparePartitions: missmatch in size of partition: "
+                      << i;
       return false;
     }
     if (memcmp(std::get<0>(p1[i]), std::get<0>(p2[i]), std::get<1>(p1[i]))) {
-      RLOG(0) << "ComparePartitions: missmatch in content of partition: " << i;
+      RLOG(LOG_ERROR)
+          << "ComparePartitions: missmatch in content of partition: " << i;
       return false;
     }
   }
@@ -927,13 +938,13 @@ uint8_t *MemoryRestorator::GetMemoryFromMemPool(size_t size) {
     return nullptr;
 
   if (size > mem_pool_->getMaxAllocationSize()) {
-    RLOG(0) << "Failed to allocate memory for the decompression, "
-               "unsupported chunk size in mempool.";
+    RLOG(LOG_ERROR) << "Failed to allocate memory for the decompression, "
+                       "unsupported chunk size in mempool.";
     return nullptr;
   }
   auto m_buff = mem_pool_->GetMemory();
   if (m_buff == nullptr) {
-    RLOG(0) << "Failed to allocate memory for the decompression.";
+    RLOG(LOG_ERROR) << "Failed to allocate memory for the decompression.";
     return nullptr;
   }
 
