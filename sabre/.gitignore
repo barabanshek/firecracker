@@ -1,0 +1,8 @@
+*.snapshot
+*.partitions
+*.csv
+firecracker.log
+*.ext4
+*vmlinux*
+*.memory.file
+*.snapshot.file

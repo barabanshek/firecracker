@@ -1,5 +1,14 @@
+#!/bin/bash
+
 #
 API_SOCKET="/tmp/firecracker.socket"
+LOGFILE="./firecracker.log"
+
+#
+KERNEL=$1
+ROOTFS=$2
+
+#
 sudo setfacl -m u:${USER}:rw /dev/kvm
 
 TAP_DEV="tap0"
@@ -24,9 +33,6 @@ sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 sudo iptables -I FORWARD 1 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 sudo iptables -I FORWARD 1 -i tap0 -o eth0 -j ACCEPT
 
-API_SOCKET="/tmp/firecracker.socket"
-LOGFILE="./firecracker.log"
-
 # Create log file
 touch $LOGFILE
 
@@ -40,7 +46,6 @@ curl -X PUT --unix-socket "${API_SOCKET}" \
     }" \
     "http://localhost/logger"
 
-KERNEL="./hello-vmlinux.bin"
 KERNEL_BOOT_ARGS="console=ttyS0 reboot=k panic=1 pci=off"
 
 ARCH=$(uname -m)
@@ -56,8 +61,6 @@ curl -X PUT --unix-socket "${API_SOCKET}" \
         \"boot_args\": \"${KERNEL_BOOT_ARGS}\"
     }" \
     "http://localhost/boot-source"
-
-ROOTFS="./hello-rootfs.ext4"
 
 # Set rootfs
 curl -X PUT --unix-socket "${API_SOCKET}" \
@@ -88,7 +91,7 @@ curl -X PUT --unix-socket "${API_SOCKET}" \
 sleep 0.015s
 
 # Dirty-page tracking.
-curl --unix-socket /tmp/firecracker.socket -i  \
+curl --unix-socket "${API_SOCKET}" -i  \
     -X PUT 'http://localhost/machine-config' \
     -H 'Accept: application/json'            \
     -H 'Content-Type: application/json'      \

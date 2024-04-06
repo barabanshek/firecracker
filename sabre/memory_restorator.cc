@@ -25,7 +25,7 @@
 #include "simple_logging.h"
 
 namespace logging {
-static constexpr int _g_log_severity_ = LOG_ERROR;
+static constexpr int _g_log_severity_ = LOG_INFO;
 }
 
 namespace acc {

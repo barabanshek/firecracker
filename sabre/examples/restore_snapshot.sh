@@ -7,7 +7,8 @@ curl --unix-socket /tmp/firecracker.socket -i \
     -H  'Accept: application/json' \
     -H  'Content-Type: application/json' \
     -d '{
-        "snapshot_path": "'$1'.snapshot.file",
-        "mem_file_path": "'$1'.memory.file",
+        "snapshot_type": "'$1'",
+        "snapshot_path": "'$2'.snapshot.file",
+        "mem_file_path": "'$2'.memory.file",
         "resume_vm": true
     }'

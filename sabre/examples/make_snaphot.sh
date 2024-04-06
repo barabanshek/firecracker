@@ -1,7 +1,12 @@
 #!/bin/bash
 
+#
+API_SOCKET="/tmp/firecracker.socket"
+
+#
 sudo setfacl -m u:${USER}:rw /dev/kvm
 
+# Check for multiple VMs.
 FCH=`ps -ef | grep -oP "firecracker.sock --id \K.*" | wc -l`
 if [ $FCH -gt 2 ]
 then
@@ -9,10 +14,10 @@ then
     exit 1
 fi
 
-FIRECRACKER_HASH=`ps -ef | grep -oP "firecracker.sock --id \K.*" | head -n 1`
+FIRECRACKER_HASH=`ps -ef | grep firecracker.sock | awk '{print $2}' | head -n 1`
 
 echo "Pausing VM #{${FIRECRACKER_HASH}}"
-curl --unix-socket /var/lib/firecracker-containerd/shim-base/default#${FIRECRACKER_HASH}/firecracker.sock -i \
+curl --unix-socket "${API_SOCKET}" -i \
     -X PATCH 'http://localhost/vm' \
     -H 'Accept: application/json' \
     -H 'Content-Type: application/json' \
@@ -21,7 +26,7 @@ curl --unix-socket /var/lib/firecracker-containerd/shim-base/default#${FIRECRACK
     }'
 
 echo "Making snapshot of VM #{${FIRECRACKER_HASH}}"
-curl --unix-socket /var/lib/firecracker-containerd/shim-base/default#${FIRECRACKER_HASH}/firecracker.sock -i \
+curl --unix-socket "${API_SOCKET}" -i \
     -X PUT 'http://localhost/snapshot/create' \
     -H  'Accept: application/json' \
     -H  'Content-Type: application/json' \
@@ -31,21 +36,12 @@ curl --unix-socket /var/lib/firecracker-containerd/shim-base/default#${FIRECRACK
         "mem_file_path": "'$2'.memory.file",
         "version": "1.1.0"
     }'
-echo "      snaphot memory.file: /var/lib/firecracker-containerd/shim-base/default#${FIRECRACKER_HASH}/$2.memory.file"
-SIZE=`ls -sh /var/lib/firecracker-containerd/shim-base/default#${FIRECRACKER_HASH}/$2.memory.file`
-echo "      size: ${SIZE}"
-echo ""
 
 echo "Resuming VM #{${FIRECRACKER_HASH}}"
-curl --unix-socket /var/lib/firecracker-containerd/shim-base/default#${FIRECRACKER_HASH}/firecracker.sock -i \
+curl --unix-socket "${API_SOCKET}" -i \
     -X PATCH 'http://localhost/vm' \
     -H 'Accept: application/json' \
     -H 'Content-Type: application/json' \
     -d '{
         "state": "Resumed"
     }'
-
-# Process snapshot.
-rm m.file; touch m.file
-sudo ../../a.out /var/lib/firecracker-containerd/shim-base/default#${FIRECRACKER_HASH}/$2.memory.file m.file 2> /dev/null
-sudo ../iaa_qpl_compress/build/compression_engine_demo --input_filename=m.file --logtostderr
