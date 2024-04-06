@@ -45,7 +45,6 @@ pub struct MachineConfig {
     /// Enables or disables dirty page tracking. Enabling allows incremental snapshots.
     #[serde(default)]
     pub track_dirty_pages: bool,
-    // from_compressed: bool,
 }
 
 impl Default for MachineConfig {
@@ -97,8 +96,6 @@ pub struct MachineConfigUpdate {
     /// Enables or disables dirty page tracking. Enabling allows incremental snapshots.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub track_dirty_pages: Option<bool>,
-    // Some doc.
-    // pub from_compressed: Option<bool>,
 }
 
 impl MachineConfigUpdate {
@@ -111,7 +108,6 @@ impl MachineConfigUpdate {
             && self.cpu_template.is_none()
             && self.smt.is_none()
             && self.track_dirty_pages.is_none()
-            // && self.from_compressed.is_none()
         {
             return true;
         }
@@ -128,7 +124,6 @@ impl From<MachineConfig> for MachineConfigUpdate {
             smt: Some(cfg.smt),
             cpu_template: cfg.cpu_template,
             track_dirty_pages: Some(cfg.track_dirty_pages),
-            // from_compressed: Some(cfg.from_compressed),
         }
     }
 }
@@ -146,8 +141,6 @@ pub struct VmConfig {
     pub cpu_template: Option<CpuTemplateType>,
     /// Enables or disables dirty page tracking. Enabling allows incremental snapshots.
     pub track_dirty_pages: bool,
-    // Some doc.
-    // pub from_compressed: bool,
 }
 
 impl VmConfig {
@@ -197,10 +190,6 @@ impl VmConfig {
             self.track_dirty_pages = track_dirty_pages;
         }
 
-        // if let Some(from_compressed) = update.from_compressed {
-        //     self.from_compressed = from_compressed;
-        // }
-
         Ok(())
     }
 }
@@ -213,7 +202,6 @@ impl Default for VmConfig {
             smt: false,
             cpu_template: None,
             track_dirty_pages: false,
-            // from_compressed: false,
         }
     }
 }
@@ -226,7 +214,6 @@ impl From<&VmConfig> for MachineConfig {
             smt: value.smt,
             cpu_template: value.cpu_template.as_ref().map(|template| template.into()),
             track_dirty_pages: value.track_dirty_pages,
-            // from_compressed: value.from_compressed,
         }
     }
 }

@@ -284,10 +284,17 @@ fn snapshot_memory_to_file(
         SnapshotType::Diff => {
             let dirty_bitmap = vmm.get_dirty_bitmap().map_err(DirtyBitmap)?;
             vmm.guest_memory()
-                .dump_dirty(&mut file, &dirty_bitmap)
+                .dump_dirty(&mut file, &dirty_bitmap, None)
+                .map_err(Memory)
+        }
+        SnapshotType::DiffCompressed => {
+            let dirty_bitmap = vmm.get_dirty_bitmap().map_err(DirtyBitmap)?;
+            vmm.guest_memory()
+                .dump_dirty(&mut file, &dirty_bitmap, Some(mem_file_path))
                 .map_err(Memory)
         }
         SnapshotType::Full => vmm.guest_memory().dump(&mut file).map_err(Memory),
+        SnapshotType::FullCompressed => vmm.guest_memory().dump_compress(mem_file_path).map_err(Memory),
     }?;
     file.flush()
         .map_err(|err| MemoryBackingFile("flush", err))?;
@@ -497,14 +504,29 @@ pub fn restore_from_snapshot(
     let mem_backend_path = &params.mem_backend.backend_path;
     let mem_state = &microvm_state.memory_state;
     let track_dirty_pages = params.enable_diff_snapshots;
-    let from_compressed = true;
 
-    println!("attempting to load mem file: {}", mem_backend_path.display());
+    // Parse snapshot type.
+    // TODO(Nikita):
+    //  - rename snapshot files for Sabre
+    //  - ...
+    let from_compressed = match &params.snapshot_type {
+        Some(value) => match value {
+            SnapshotType::FullCompressed => true,
+            SnapshotType::DiffCompressed => true,
+            _ => false,
+        }
+        None => false,
+    };
 
     let (guest_memory, uffd) = match params.mem_backend.backend_type {
         MemBackendType::File => (
-            guest_memory_from_file(mem_backend_path, mem_state, track_dirty_pages, from_compressed)
-                .map_err(RestoreFromSnapshotGuestMemoryError::File)?,
+            if from_compressed {
+                guest_memory_from_sabre_file(mem_backend_path, mem_state, track_dirty_pages)
+                    .map_err(RestoreFromSnapshotGuestMemoryError::File)?
+            } else {
+                guest_memory_from_file(mem_backend_path, mem_state, track_dirty_pages)
+                    .map_err(RestoreFromSnapshotGuestMemoryError::File)?
+            },
             None,
         ),
         MemBackendType::Uffd => guest_memory_from_uffd(
@@ -514,7 +536,6 @@ pub fn restore_from_snapshot(
             // We enable the UFFD_FEATURE_EVENT_REMOVE feature only if a balloon device
             // is present in the microVM state.
             microvm_state.device_states.balloon_device.is_some(),
-            from_compressed,
         )
         .map_err(RestoreFromSnapshotGuestMemoryError::Uffd)?,
     };
@@ -525,7 +546,6 @@ pub fn restore_from_snapshot(
         guest_memory,
         uffd,
         track_dirty_pages,
-        // from_compressed,
         seccomp_filters,
         vm_resources,
     )
@@ -569,10 +589,19 @@ fn guest_memory_from_file(
     mem_file_path: &Path,
     mem_state: &GuestMemoryState,
     track_dirty_pages: bool,
-    from_compressed: bool,
 ) -> Result<GuestMemoryMmap, GuestMemoryFromFileError> {
     let mem_file = File::open(mem_file_path)?;
-    let guest_mem = GuestMemoryMmap::restore(Some(&mem_file), mem_state, track_dirty_pages, from_compressed)?;
+    let guest_mem = GuestMemoryMmap::restore(Some(&mem_file), mem_state, track_dirty_pages, None)?;
+    Ok(guest_mem)
+}
+
+fn guest_memory_from_sabre_file(
+    mem_file_path: &Path,
+    mem_state: &GuestMemoryState,
+    track_dirty_pages: bool,
+) -> Result<GuestMemoryMmap, GuestMemoryFromFileError> {
+    let mem_file = File::open(mem_file_path)?; // TODO (Nikita): remove
+    let guest_mem = GuestMemoryMmap::restore(Some(&mem_file), mem_state, track_dirty_pages, Some(&mem_file_path))?;
     Ok(guest_mem)
 }
 
@@ -596,9 +625,8 @@ fn guest_memory_from_uffd(
     mem_state: &GuestMemoryState,
     track_dirty_pages: bool,
     enable_balloon: bool,
-    from_compressed: bool,
 ) -> Result<(GuestMemoryMmap, Option<Uffd>), GuestMemoryFromUffdError> {
-    let guest_memory = GuestMemoryMmap::restore(None, mem_state, track_dirty_pages, from_compressed)?;
+    let guest_memory = GuestMemoryMmap::restore(None, mem_state, track_dirty_pages, None)?;
 
     let mut uffd_builder = UffdBuilder::new();
 

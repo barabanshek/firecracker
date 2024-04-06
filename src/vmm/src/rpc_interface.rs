@@ -791,6 +791,16 @@ impl RuntimeApiController {
                     elapsed_time_us
                 );
             }
+            SnapshotType::FullCompressed => {
+                let elapsed_time_us = update_metric_with_elapsed_time(
+                    &METRICS.latencies_us.vmm_full_create_snapshot,
+                    create_start_us,
+                );
+                info!(
+                    "'create full snapshot with compression' VMM action took {} us.",
+                    elapsed_time_us
+                );
+            }
             SnapshotType::Diff => {
                 let elapsed_time_us = update_metric_with_elapsed_time(
                     &METRICS.latencies_us.vmm_diff_create_snapshot,
@@ -798,6 +808,16 @@ impl RuntimeApiController {
                 );
                 info!(
                     "'create diff snapshot' VMM action took {} us.",
+                    elapsed_time_us
+                );
+            }
+            SnapshotType::DiffCompressed => {
+                let elapsed_time_us = update_metric_with_elapsed_time(
+                    &METRICS.latencies_us.vmm_diff_create_snapshot,
+                    create_start_us,
+                );
+                info!(
+                    "'create diff snapshot with compression' VMM action took {} us.",
                     elapsed_time_us
                 );
             }

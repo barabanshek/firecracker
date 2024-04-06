@@ -155,7 +155,6 @@ fn create_vmm_and_vcpus(
     guest_memory: GuestMemoryMmap,
     uffd: Option<Uffd>,
     track_dirty_pages: bool,
-    // from_compressed: bool,
     vcpu_count: u8,
     kvm_capabilities: Vec<KvmCapability>,
 ) -> Result<(Vmm, Vec<Vcpu>), StartMicrovmError> {
@@ -264,8 +263,7 @@ pub fn build_microvm_for_boot(
         .ok_or(MissingKernelConfig)?;
 
     let track_dirty_pages = vm_resources.track_dirty_pages();
-    let from_compressed = false;
-    let guest_memory = create_guest_memory(vm_resources.vm_config.mem_size_mib, track_dirty_pages, from_compressed)?;
+    let guest_memory = create_guest_memory(vm_resources.vm_config.mem_size_mib, track_dirty_pages)?;
     let entry_addr = load_kernel(boot_config, &guest_memory)?;
     let initrd = load_initrd_from_config(boot_config, &guest_memory)?;
     // Clone the command-line so that a failed boot doesn't pollute the original.
@@ -431,7 +429,6 @@ pub fn build_microvm_from_snapshot(
     guest_memory: GuestMemoryMmap,
     uffd: Option<Uffd>,
     track_dirty_pages: bool,
-    // from_compressed: bool,
     seccomp_filters: &BpfThreadMap,
     vm_resources: &mut VmResources,
 ) -> Result<Arc<Mutex<Vmm>>, BuildMicrovmFromSnapshotError> {
@@ -446,7 +443,6 @@ pub fn build_microvm_from_snapshot(
         guest_memory.clone(),
         uffd,
         track_dirty_pages,
-        // from_compressed,
         vcpu_count,
         microvm_state.vm_state.kvm_cap_modifiers.clone(),
     )?;
@@ -499,7 +495,6 @@ pub fn build_microvm_from_snapshot(
         smt: Some(microvm_state.vm_info.smt),
         cpu_template: Some(microvm_state.vm_info.cpu_template),
         track_dirty_pages: Some(track_dirty_pages),
-        // from_compressed: Some(from_compressed),
     })?;
 
     // Restore the boot source config paths.
@@ -547,7 +542,6 @@ pub fn build_microvm_from_snapshot(
 pub fn create_guest_memory(
     mem_size_mib: usize,
     track_dirty_pages: bool,
-    from_compressed: bool,
 ) -> Result<GuestMemoryMmap, StartMicrovmError> {
     let mem_size = mem_size_mib << 20;
     let arch_mem_regions = crate::arch::arch_memory_regions(mem_size);
@@ -558,7 +552,7 @@ pub fn create_guest_memory(
             .map(|(addr, size)| (None, *addr, *size))
             .collect::<Vec<_>>()[..],
         track_dirty_pages,
-        from_compressed,
+        None,
     )
     .map_err(StartMicrovmError::GuestMemoryMmap)
 }

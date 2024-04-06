@@ -13,6 +13,10 @@ use serde::{Deserialize, Serialize};
 /// creating a new snapshot.
 #[derive(Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub enum SnapshotType {
+    /// Diff with compression.
+    DiffCompressed,
+    /// Full with compression.
+    FullCompressed,
     /// Diff snapshot.
     Diff,
     /// Full snapshot.
@@ -53,6 +57,8 @@ pub struct CreateSnapshotParams {
 /// Stores the configuration that will be used for loading a snapshot.
 #[derive(Debug, PartialEq, Eq)]
 pub struct LoadSnapshotParams {
+    /// SnapshotType
+    pub snapshot_type: Option<SnapshotType>,
     /// Path to the file that contains the microVM state to be loaded.
     pub snapshot_path: PathBuf,
     /// Specifies guest memory backend configuration.
@@ -63,14 +69,14 @@ pub struct LoadSnapshotParams {
     /// When set to true, the vm is also resumed if the snapshot load
     /// is successful.
     pub resume_vm: bool,
-    // Some doc.
-    // pub enable_from_compress: bool,
 }
 
 /// Stores the configuration for loading a snapshot that is provided by the user.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LoadSnapshotConfig {
+    /// SnapshotType
+    pub snapshot_type: Option<SnapshotType>,
     /// Path to the file that contains the microVM state to be loaded.
     pub snapshot_path: PathBuf,
     /// Path to the file that contains the guest memory to be loaded. To be used only if
@@ -87,8 +93,6 @@ pub struct LoadSnapshotConfig {
     /// Whether or not to resume the vm post snapshot load.
     #[serde(default)]
     pub resume_vm: bool,
-    // Some doc.
-    // pub enable_from_compress: bool,
 }
 
 /// Stores the configuration used for managing snapshot memory.

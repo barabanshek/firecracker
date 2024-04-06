@@ -7,6 +7,9 @@ use std::fs::File;
 use std::env;
 use std::io::SeekFrom;
 
+use std::path::Path;
+use std::io::{Error, ErrorKind};
+
 use utils::vm_memory::{
     Bitmap, FileOffset, GuestAddress, GuestMemory, GuestMemoryError, GuestMemoryMmap,
     GuestMemoryRegion, MemoryRegionAddress, WriteVolatile, VolatileSlice,
@@ -58,12 +61,15 @@ where
     /// Describes GuestMemoryMmap through a GuestMemoryState struct.
     fn describe(&self) -> GuestMemoryState; 
     /// Dumps all contents of GuestMemoryMmap to a writer.
-    fn dump<T: WriteVolatile + CorrectSize>(&self, writer: &mut T) -> Result<(), SnapshotMemoryError>;
+    fn dump<T: WriteVolatile>(&self, writer: &mut T) -> Result<(), SnapshotMemoryError>;
+    /// Dumps all contents of GuestMemoryMmap to mem_file_path, do compression through Sabre.
+    fn dump_compress(&self, mem_file_path: &Path) -> Result<(), SnapshotMemoryError>;
     /// Dumps all pages of GuestMemoryMmap present in `dirty_bitmap` to a writer.
     fn dump_dirty<T: WriteVolatile + std::io::Seek>(
         &self,
         writer: &mut T,
         dirty_bitmap: &DirtyBitmap,
+        mem_file_path: Option<&Path>,
     ) -> Result<(), SnapshotMemoryError>;
     /// Creates a GuestMemoryMmap given a `file` containing the data
     /// and a `state` containing mapping information.
@@ -71,7 +77,7 @@ where
         file: Option<&File>,
         state: &GuestMemoryState,
         track_dirty_pages: bool,
-        from_compressed: bool,
+        sabre_filename: Option<&Path>,
     ) -> Result<Self, SnapshotMemoryError>;
 }
 
@@ -88,6 +94,8 @@ pub enum SnapshotMemoryError {
     PageSize(#[from] errno::Error),
     /// Cannot dump memory: {0:?}
     WriteMemory(#[from] GuestMemoryError),
+    /// Error from Sabre FFI
+    SabreError(&'static str),
 }
 
 extern "C" {
@@ -114,29 +122,25 @@ impl SnapshotMemory for GuestMemoryMmap {
     }
 
     /// Dumps all contents of GuestMemoryMmap to a writer.
-    fn dump<T: WriteVolatile + CorrectSize>(&self, writer: &mut T) -> Result<(), SnapshotMemoryError> {
-        let do_compression = env::var("FIRECRACKER_SNAPSHOT_COMPRESSION").expect("$FIRECRACKER_SNAPSHOT_COMPRESSION is not set") == "Enabled";
-        if do_compression {
-            println!("Writing compressed snapshot.");
-            self.iter().for_each(|region| {
-                let ret = unsafe {
-                    let c_string = std::ffi::CString::new("/home/nikita/snap/snap").unwrap();
+    fn dump<T: WriteVolatile>(&self, writer: &mut T) -> Result<(), SnapshotMemoryError> {
+        self.iter()
+            .try_for_each(|region| Ok(writer.write_all_volatile(&region.as_volatile_slice()?)?))
+            .map_err(SnapshotMemoryError::WriteMemory)
+    }
+
+    /// Dumps all contents of GuestMemoryMmap to mem_file_path, do compression through Sabre.
+    fn dump_compress(&self, mem_file_path: &Path) -> Result<(), SnapshotMemoryError> {
+        self.iter().try_for_each(|region| {
+                let c_string = std::ffi::CString::new(mem_file_path.as_os_str().to_str().unwrap()).unwrap();
+                let res = unsafe {
                     AddPartition(region.as_ptr() as u64, region.len() as u64);
                     SnapshotPartitions(c_string.as_ptr(), region.as_ptr() as u64)
                 };
-                if ret == 0 {
-                    println!("Snapshot created.");
-                } else {
-                    println!("Failed to create snapshot"); 
+                if res != 0 {
+                    return Err(SnapshotMemoryError::SabreError("Sabre error when creating a snapshot"));
                 }
-            });
-            Ok(())
-        } else {
-            println!("Writing standard snapshot.");
-            self.iter()
-                .try_for_each(|region| Ok(writer.write_all_volatile(&region.as_volatile_slice()?)?))
-                .map_err(SnapshotMemoryError::WriteMemory)
-        }
+                Ok(())
+            })
     }
 
     /// Dumps all pages of GuestMemoryMmap present in `dirty_bitmap` to a writer.
@@ -144,13 +148,16 @@ impl SnapshotMemory for GuestMemoryMmap {
         &self,
         writer: &mut T,
         dirty_bitmap: &DirtyBitmap,
+        mem_file_path: Option<&Path>,
     ) -> Result<(), SnapshotMemoryError> {
         println!("Creating dirty snapshot...");
-        let do_compression_ = env::var("FIRECRACKER_SNAPSHOT_COMPRESSION").expect("$FIRECRACKER_SNAPSHOT_COMPRESSION is not set") == "Enabled";
-        let do_reap_recording= env::var("FIRECRACKER_SNAPSHOT_REAP_RECORD").expect("$FIRECRACKER_SNAPSHOT_REAP_RECORD is not set") == "Enabled";
-        let do_reap_restore =env::var("FIRECRACKER_SNAPSHOT_REAP_RESTORE").expect("$FIRECRACKER_SNAPSHOT_REAP_RESTORE is not set") == "Enabled";
 
-        let do_compression = do_compression_ && !do_reap_recording && !do_reap_restore;
+        let (do_compression, mem_file_path_str) = match mem_file_path {
+            Some(value) => (true,
+                Some(value.as_os_str().to_str().unwrap())
+            ),
+            None => (false, None),
+        };
 
         let mut writer_offset = 0;
         let page_size = get_page_size()?;
@@ -214,15 +221,14 @@ impl SnapshotMemory for GuestMemoryMmap {
                 }
 
                 if do_compression {
-                    let c_string = std::ffi::CString::new("/home/nikita/snap/snap.diff").unwrap();
+                    let c_string = std::ffi::CString::new(mem_file_path_str.unwrap()).unwrap();
                     let ret = unsafe {
                         SnapshotPartitions(c_string.as_ptr(), region.as_ptr() as u64)
                     };
-                    if ret == 0 {
-                        println!("Snapshot created."); 
-                    } else {
-                        println!("Failed to create snapshot"); 
-                    }
+                    // TODO(Nikita): gave up to return an error here (learn Rust!)
+                    // if ret != 0 {
+                    //     return Err(SnapshotMemoryError::SabreError("Sabre error when creating a snapshot"));
+                    // }
                 }
 
                 writer_offset += region.len();
@@ -241,7 +247,7 @@ impl SnapshotMemory for GuestMemoryMmap {
         file: Option<&File>,
         state: &GuestMemoryState,
         track_dirty_pages: bool,
-        from_compressed: bool,
+        sabre_filename: Option<&Path>,
     ) -> Result<Self, SnapshotMemoryError> {
         let mut regions = vec![];
         for region in state.regions.iter() {
@@ -251,10 +257,9 @@ impl SnapshotMemory for GuestMemoryMmap {
             };
 
             regions.push((f, GuestAddress(region.base_address), region.size));
-            println!("Restore region");
         }
 
-        utils::vm_memory::create_guest_memory(&regions, track_dirty_pages, from_compressed)
+        utils::vm_memory::create_guest_memory(&regions, track_dirty_pages, sabre_filename)
             .map_err(SnapshotMemoryError::CreateMemory)
     }
 }
@@ -279,7 +284,7 @@ mod tests {
             (None, GuestAddress(0), page_size),
             (None, GuestAddress(page_size as u64 * 2), page_size),
         ];
-        let guest_memory = utils::vm_memory::create_guest_memory(&mem_regions[..], true, false).unwrap();
+        let guest_memory = utils::vm_memory::create_guest_memory(&mem_regions[..], true).unwrap();
 
         let expected_memory_state = GuestMemoryState {
             regions: vec![
@@ -304,7 +309,7 @@ mod tests {
             (None, GuestAddress(0), page_size * 3),
             (None, GuestAddress(page_size as u64 * 4), page_size * 3),
         ];
-        let guest_memory = utils::vm_memory::create_guest_memory(&mem_regions[..], true, false).unwrap();
+        let guest_memory = utils::vm_memory::create_guest_memory(&mem_regions[..], true).unwrap();
 
         let expected_memory_state = GuestMemoryState {
             regions: vec![
@@ -334,7 +339,7 @@ mod tests {
             (None, GuestAddress(0), page_size * 2),
             (None, GuestAddress(page_size as u64 * 3), page_size * 2),
         ];
-        let guest_memory = utils::vm_memory::create_guest_memory(&mem_regions[..], true, false).unwrap();
+        let guest_memory = utils::vm_memory::create_guest_memory(&mem_regions[..], true).unwrap();
         // Check that Firecracker bitmap is clean.
         let _res: Result<(), SnapshotMemoryError> = guest_memory.iter().try_for_each(|r| {
             assert!(!r.bitmap().dirty_at(0));
@@ -389,7 +394,7 @@ mod tests {
             dirty_bitmap.insert(1, vec![0b10; 1]);
 
             let mut file = TempFile::new().unwrap().into_file();
-            guest_memory.dump_dirty(&mut file, &dirty_bitmap).unwrap();
+            guest_memory.dump_dirty(&mut file, &dirty_bitmap, None).unwrap();
 
             // We can restore from this because this is the first dirty dump.
             let restored_guest_memory =
@@ -424,7 +429,7 @@ mod tests {
                 .write(&twos[..], GuestAddress(page_size as u64))
                 .unwrap();
 
-            guest_memory.dump_dirty(&mut reader, &dirty_bitmap).unwrap();
+            guest_memory.dump_dirty(&mut reader, &dirty_bitmap, None).unwrap();
 
             // Check that only the dirty regions are dumped.
             let mut diff_file_content = Vec::new();
