@@ -59,7 +59,7 @@ where
     Self: Sized,
 {
     /// Describes GuestMemoryMmap through a GuestMemoryState struct.
-    fn describe(&self) -> GuestMemoryState; 
+    fn describe(&self) -> GuestMemoryState;
     /// Dumps all contents of GuestMemoryMmap to a writer.
     fn dump<T: WriteVolatile>(&self, writer: &mut T) -> Result<(), SnapshotMemoryError>;
     /// Dumps all contents of GuestMemoryMmap to mem_file_path, do compression through Sabre.
@@ -150,8 +150,6 @@ impl SnapshotMemory for GuestMemoryMmap {
         dirty_bitmap: &DirtyBitmap,
         mem_file_path: Option<&Path>,
     ) -> Result<(), SnapshotMemoryError> {
-        println!("Creating dirty snapshot...");
-
         let (do_compression, mem_file_path_str) = match mem_file_path {
             Some(value) => (true,
                 Some(value.as_os_str().to_str().unwrap())
@@ -164,8 +162,7 @@ impl SnapshotMemory for GuestMemoryMmap {
 
         self.iter()
             .enumerate()
-            .try_for_each(|(slot, region)| {
-                println!("Region!");          
+            .try_for_each(|(slot, region)| {        
                 let kvm_bitmap = dirty_bitmap.get(&slot).unwrap();
                 let firecracker_bitmap = region.bitmap();
                 let mut write_size = 0;

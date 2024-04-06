@@ -230,20 +230,10 @@ impl VmResources {
         self.vm_config.track_dirty_pages
     }
 
-    /// Some doc.
-    // pub fn from_compressed(&self) -> bool {
-    //     self.vm_config.from_compressed
-    // }
-
     /// Configures the dirty page tracking functionality of the microVM.
     pub fn set_track_dirty_pages(&mut self, dirty_page_tracking: bool) {
         self.vm_config.track_dirty_pages = dirty_page_tracking;
     }
-
-    /// Some doc.
-    // pub fn set_from_compressed(&mut self, from_compressed: bool) {
-    //     self.vm_config.from_compressed = from_compressed;
-    // }
 
     /// Add a custom CPU template to the VM resources
     /// to configure vCPUs.

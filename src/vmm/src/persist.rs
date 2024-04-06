@@ -505,10 +505,6 @@ pub fn restore_from_snapshot(
     let mem_state = &microvm_state.memory_state;
     let track_dirty_pages = params.enable_diff_snapshots;
 
-    // Parse snapshot type.
-    // TODO(Nikita):
-    //  - rename snapshot files for Sabre
-    //  - ...
     let from_compressed = match &params.snapshot_type {
         Some(value) => match value {
             SnapshotType::FullCompressed => true,
