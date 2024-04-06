@@ -42,7 +42,27 @@ sudo ./build/sabre/memory_restorator_demo
 sudo -E ./build/sabre/memory_restorator_test
 ```
 
-For regression, even if all tests pass, one still must run the microbenchmark to A/B-test the changes do not make things slower.
+For regression, even if all tests pass, one still must run the microbenchmark to test the changes do not make things slower.
+
+## Running integration tests
+
+Sabe is integrated with Firecracker via Rust FFI (`git diff 5326773`). For now, we don't have good integration tests, but one can run a sequence of simple REST API calls to boot/snapshot/restore in different configurations.
+```
+pushd examples
+
+# Get sample guest kernel and rootfs
+ARCH="$(uname -m)"
+wget https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/v1.8/${ARCH}/vmlinux-5.10.210
+wget https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/v1.8/${ARCH}/ubuntu-22.04.ext4
+
+# Run test scripts
+# Test Full snapshots
+sudo ./test.sh <path to kernel/vmlinux> <path to rootfs>
+# Test Diff snapshots
+sudo ./test_diff.sh <path to kernel/vmlinux> <path to rootfs>
+
+popd
+```
 
 ## Running microbenchmark
 
