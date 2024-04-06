@@ -6,12 +6,9 @@
 // found in the THIRD-PARTY file.
 
 use std::fmt::Debug;
-use std::env;
 use std::io::{Error as IoError, ErrorKind};
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
-
-use std::time::Instant;
 
 pub use vm_memory::bitmap::{AtomicBitmap, Bitmap, BitmapSlice, BS};
 use vm_memory::mmap::{check_file_offset, NewBitmap};
@@ -57,9 +54,6 @@ fn build_guarded_region(
     track_dirty_pages: bool,
     sabre_filename: Option<&Path>
 ) -> Result<GuestMmapRegion, MmapRegionError> {
-    // Start time to measure Sabre.
-    let START = Instant::now();
-
     let page_size = crate::get_page_size().expect("Cannot retrieve page size.");
     let guarded_size = size + GUARD_PAGE_COUNT * 2 * page_size;
 
@@ -139,10 +133,6 @@ fn build_guarded_region(
         true => Some(AtomicBitmap::with_len(size)),
         false => None,
     };
-
-    // Print memory building time.
-    let STOP = START.elapsed();
-    println!("Memory restoration total, took {:?}", STOP);
 
     // SAFETY: Safe because the parameters are valid.
     unsafe {

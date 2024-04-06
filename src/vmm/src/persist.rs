@@ -10,6 +10,7 @@ use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use log::{info, warn};
 use seccompiler::BpfThreadMap;
@@ -496,6 +497,9 @@ pub fn restore_from_snapshot(
     version_map: VersionMap,
     vm_resources: &mut VmResources,
 ) -> Result<Arc<Mutex<Vmm>>, RestoreFromSnapshotError> {
+    // To measure time.
+    let START = Instant::now();
+
     let microvm_state = snapshot_state_from_file(&params.snapshot_path, version_map)?;
 
     // Some sanity checks before building the microvm.
@@ -535,6 +539,10 @@ pub fn restore_from_snapshot(
         )
         .map_err(RestoreFromSnapshotGuestMemoryError::Uffd)?,
     };
+
+    let STOP = START.elapsed();
+    warn!("Memory restoration total, took {:?}", STOP);
+
     builder::build_microvm_from_snapshot(
         instance_info,
         event_manager,
