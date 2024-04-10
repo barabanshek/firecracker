@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ARCH="$(uname -m)"
-FIRECRACKER_PATH=/home/nikita/firecracker/build/cargo_target/${ARCH}-unknown-linux-gnu/release/firecracker
+FIRECRACKER_PATH=$(pwd)/../../build/cargo_target/${ARCH}-unknown-linux-gnu/release/firecracker
 
 # Configure our firecracker-containerd binary to use our new snapshotter and
 # separate storage from the default containerd binary.

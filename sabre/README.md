@@ -89,3 +89,28 @@ python3 sabre/scripts/plot_microbenchmark.py results.csv
 This reproduces the follwoing characterization of Sabre memory restoration:
 
 ![handling](images/handling_plots.png)
+
+## Running with firecracker-containerd
+
+[Firecracker-containerd](https://github.com/firecracker-microvm/firecracker-containerd) allows to run regular docker containers in firecracker. To try it, run the following:
+
+```
+pushd containerd/
+
+# Prepare machine to run containerd
+./install_contrainerd.sh
+
+# Setup env to run containerd (if fails - run one more time)
+./configure_node_for_containerd.sh
+
+# Try it out
+sudo firecracker-containerd --config /etc/firecracker-containerd/config.toml
+
+# In another window
+sudo firecracker-ctr --address /run/firecracker-containerd/containerd.sock image pull --snapshotter devmapper docker.io/library/hello-world:latest
+sudo firecracker-ctr --address /run/firecracker-containerd/containerd.sock run --snapshotter devmapper --runtime aws.firecracker --rm --tty --net-host docker.io/library/hello-world:latest test
+```
+
+Please, rerfer to [original documentation](https://github.com/firecracker-microvm/firecracker-containerd/blob/main/docs/getting-started.md) to hack around firecracker-containerd.
+
+A special credit to [vHive project](https://github.com/vhive-serverless/vHive) for the inspiration!
