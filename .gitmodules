@@ -1,3 +1,6 @@
 [submodule "sabre/vHive"]
 	path = sabre/vHive
 	url = https://github.com/barabanshek/vHive.git
+[submodule "sabre/containerd/vHive"]
+	path = sabre/containerd/vHive
+	url = https://github.com/barabanshek/vHive.git
