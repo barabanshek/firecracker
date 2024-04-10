@@ -94,4 +94,4 @@ sudo tee /etc/containerd/firecracker-runtime.json <<EOF
 EOF
 
 # CNI.
-cp firecracker-containerd/tools/demo/fcnet.conflist  /etc/cni/conf.d/fcnet.conflist
+sudo cp firecracker-containerd/tools/demo/fcnet.conflist  /etc/cni/conf.d/fcnet.conflist
