@@ -39,6 +39,11 @@ sudo ./build/sabre/memory_restorator_demo
 ## Running unit tests
 ```
 # export SABRE_TEST_SOFTWARE_PATH=1 to use software compression for testing
+
+# Configure the machine and setup the IAA hardware
+pushd sabre/scripts/; sudo ./setup_node.sh <CPU frequency>; popd
+
+# Run tests
 sudo -E ./build/sabre/memory_restorator_test
 ```
 
