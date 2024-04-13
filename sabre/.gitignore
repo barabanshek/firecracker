@@ -6,4 +6,3 @@ firecracker.log
 *vmlinux*
 *.memory.file
 *.snapshot.file
-*firecracker-containerd*

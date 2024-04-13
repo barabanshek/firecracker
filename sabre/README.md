@@ -97,26 +97,4 @@ This reproduces the follwoing characterization of Sabre memory restoration:
 
 ## Running with firecracker-containerd
 
-[Firecracker-containerd](https://github.com/firecracker-microvm/firecracker-containerd) allows to run regular docker containers in firecracker. To try it, run the following:
-
-```
-pushd containerd/
-
-# Prepare machine to run containerd
-./install_contrainerd.sh
-
-# Setup env to run containerd (if fails - run one more time)
-./configure_node_for_containerd.sh
-
-# Try it out; first run on a node will take time when activating devmapper device;
-# wait until the output stabilizes before moving on
-sudo firecracker-containerd --config /etc/firecracker-containerd/config.toml
-
-# In another window
-sudo firecracker-ctr --address /run/firecracker-containerd/containerd.sock image pull --snapshotter devmapper docker.io/library/hello-world:latest
-sudo firecracker-ctr --address /run/firecracker-containerd/containerd.sock run --snapshotter devmapper --runtime aws.firecracker --rm --tty --net-host docker.io/library/hello-world:latest test
-```
-
-Please, rerfer to [original documentation](https://github.com/firecracker-microvm/firecracker-containerd/blob/main/docs/getting-started.md) to hack around firecracker-containerd.
-
-A special credit to [vHive project](https://github.com/vhive-serverless/vHive) for the inspiration!
+[Firecracker-containerd](https://github.com/firecracker-microvm/firecracker-containerd) allows to run regular docker containers in firecracker. Please refer to instructions in our [fork of firecracker-containerd](https://github.com/barabanshek/firecracker-containerd/tree/sabre/sabre) for instructions.

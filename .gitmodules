@@ -1,6 +1,0 @@
-[submodule "sabre/containerd/vHive"]
-	path = sabre/containerd/vHive
-	url = https://github.com/barabanshek/vHive.git
-[submodule "sabre/containerd/firecracker-go-sdk"]
-	path = sabre/containerd/firecracker-go-sdk
-	url = https://github.com/barabanshek/firecracker-go-sdk.git
