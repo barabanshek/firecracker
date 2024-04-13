@@ -95,3 +95,5 @@ EOF
 
 # CNI.
 sudo cp firecracker-containerd/tools/demo/fcnet.conflist  /etc/cni/conf.d/fcnet.conflist
+
+echo "Node is fully configured and ready!"

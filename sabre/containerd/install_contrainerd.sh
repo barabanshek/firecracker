@@ -51,8 +51,16 @@ make demo-network
 # Make rootfs image.
 make image
 
+# Install all things.
+sudo make install
+cp bin/* /opt/cni/bin/
+
+# Sometimes change permissions is required.
+chmod 775 /opt/cni/bin/*
+
+popd
+
 # Download kernel
 curl -fsSL -o hello-vmlinux.bin https://s3.amazonaws.com/spec.ccfc.min/img/quickstart_guide/x86_64/kernels/vmlinux.bin
 
 echo "firecracker-containerd is installed with all dependencies"
-popd

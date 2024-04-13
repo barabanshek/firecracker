@@ -108,7 +108,8 @@ pushd containerd/
 # Setup env to run containerd (if fails - run one more time)
 ./configure_node_for_containerd.sh
 
-# Try it out
+# Try it out; first run on a node will take time when activating devmapper device;
+# wait until the output stabilizes before moving on
 sudo firecracker-containerd --config /etc/firecracker-containerd/config.toml
 
 # In another window
