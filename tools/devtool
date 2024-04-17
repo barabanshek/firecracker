@@ -69,7 +69,7 @@
 #     would help with reproducible builds (in addition to pinning Cargo.lock)
 
 # Development container image (without tag)
-DEVCTR_IMAGE_NO_TAG="public.ecr.aws/firecracker/fcuvm"
+DEVCTR_IMAGE_NO_TAG="barabanshik/firecrackder_sabre_devctr"
 
 # Development container tag
 DEVCTR_IMAGE_TAG=${DEVCTR_IMAGE_TAG:-v64}

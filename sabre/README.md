@@ -16,7 +16,7 @@ Sabre is integrated in standard Firecracker's Docker development container. Only
 ```
 # Run in root folder of the firecracker repository
 
-docker pull barabanshik/firecracker_sabre:latest
+docker pull barabanshik/firecrackder_sabre_devctr:latest
 git clone https://github.com/barabanshek/firecracker.git
 git fetch origin sabre; git checkout sabre
 tools/devtool build --release --libc gnu
