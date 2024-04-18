@@ -9,7 +9,7 @@ echo 4000 > /sys/devices/system/node/node0/hugepages/hugepages-2048kB/nr_hugepag
 echo 4000 > /sys/devices/system/node/node1/hugepages/hugepages-2048kB/nr_hugepages
 
 # Configure IAA
-./configure_iaa_user.sh 0 1,3 16 8
+./configure_iaa_user.sh 0 1,15 16 8
 
 # Fix CPU frequencies
 ./prepare_machine.sh ${cpu_freq}
