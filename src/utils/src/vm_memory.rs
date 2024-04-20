@@ -33,6 +33,80 @@ extern "C" {
     fn RestoreReapSnapshot(r_addr: u64, r_size: u64, snapshot_filename: *const i8, ws_filename: *const i8, do_compress: u8) -> u8;
 }
 
+fn build_guarded_region_with_reap(
+    size: usize,
+    prot: i32,
+    flags: i32,
+    track_dirty_pages: bool,
+    snapshot_filename: &Path,
+    do_reap_record: bool,
+    do_compression: bool
+) -> Result<GuestMmapRegion, MmapRegionError> {
+    let page_size = crate::get_page_size().expect("Cannot retrieve page size.");
+    let guarded_size = size + GUARD_PAGE_COUNT * 2 * page_size;
+
+    // Map the guarded range to PROT_NONE
+    // SAFETY: Safe because the parameters are valid.
+    let guard_addr = unsafe {
+        libc::mmap(
+            std::ptr::null_mut(),
+            guarded_size,
+            libc::PROT_NONE,
+            libc::MAP_ANONYMOUS | libc::MAP_PRIVATE | libc::MAP_NORESERVE,
+            -1,
+            0,
+        )
+    };
+    if guard_addr == libc::MAP_FAILED {
+        return Err(MmapRegionError::Mmap(IoError::last_os_error()));
+    }
+
+    let region_start_addr = guard_addr as usize + page_size * GUARD_PAGE_COUNT;
+
+    let region_addr = unsafe {
+        libc::mmap(
+            region_start_addr as *mut libc::c_void,
+            size,
+            libc::PROT_READ | libc::PROT_WRITE,
+            libc::MAP_ANONYMOUS | libc::MAP_PRIVATE | libc::MAP_NORESERVE | libc::MAP_FIXED,
+            -1,
+            0,
+        )
+    };
+    if region_addr == libc::MAP_FAILED {
+        return Err(MmapRegionError::Mmap(IoError::last_os_error()));
+    }
+
+    if do_reap_record {
+        let ret = unsafe {
+            let c_string = std::ffi::CString::new(snapshot_filename.as_os_str().to_str().unwrap()).unwrap();
+            let c_string_ws = std::ffi::CString::new(snapshot_filename.with_extension("").with_extension("ws").as_os_str().to_str().unwrap()).unwrap();
+            let c_string_sock_filename = std::ffi::CString::new("/tmp/reap.sock").unwrap();
+            InitReapRecorder(c_string_sock_filename.as_ptr(), region_start_addr as u64, size as u64, c_string.as_ptr(), c_string_ws.as_ptr(), do_compression as u8)
+        };
+    } else {
+        let ret = unsafe {
+            let c_string = std::ffi::CString::new(snapshot_filename.as_os_str().to_str().unwrap()).unwrap();
+            let c_string_ws = std::ffi::CString::new(snapshot_filename.with_extension("").with_extension("ws").as_os_str().to_str().unwrap()).unwrap();
+            RestoreReapSnapshot(region_start_addr as u64, size as u64, c_string.as_ptr(), c_string_ws.as_ptr(), do_compression as u8)
+        };
+    }
+
+    let bitmap = match track_dirty_pages {
+        true => Some(AtomicBitmap::with_len(size)),
+        false => None,
+    };
+
+    // SAFETY: Safe because the parameters are valid.
+    unsafe {
+        MmapRegionBuilder::new_with_bitmap(size, bitmap)
+            .with_raw_mmap_pointer(region_start_addr as *mut u8)
+            .with_mmap_prot(prot)
+            .with_mmap_flags(flags)
+            .build()
+    }
+}
+
 /// Build a `MmapRegion` surrounded by guard pages.
 ///
 /// Initially, we map a `PROT_NONE` guard region of size:
@@ -142,6 +216,33 @@ fn build_guarded_region(
             .with_mmap_flags(flags)
             .build()
     }
+}
+
+/// Helper for creating the guest memory with reap.
+pub fn create_guest_memory_with_reap(
+    regions: &[(Option<FileOffset>, GuestAddress, usize)],
+    track_dirty_pages: bool,
+    snapshot_filename: &Path,
+    do_reap_record: bool,
+    do_compression: bool
+) -> std::result::Result<GuestMemoryMmap, Error> {
+    let prot = libc::PROT_READ | libc::PROT_WRITE;
+    let mut mmap_regions = Vec::with_capacity(regions.len());
+
+    for region in regions {
+        let flags = match region.0 {
+            None => libc::MAP_NORESERVE | libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+            Some(_) => libc::MAP_NORESERVE | libc::MAP_PRIVATE,
+        };
+
+        let mmap_region =
+            build_guarded_region_with_reap(region.2, prot, flags, track_dirty_pages, snapshot_filename, do_reap_record, do_compression)
+                .map_err(Error::MmapRegion)?;
+
+        mmap_regions.push(GuestRegionMmap::new(mmap_region, region.1)?);
+    }
+
+    GuestMemoryMmap::from_regions(mmap_regions)
 }
 
 /// Helper for creating the guest memory.

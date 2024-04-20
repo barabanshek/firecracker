@@ -171,6 +171,10 @@ impl ApiServer {
                     &METRICS.latencies_us.diff_create_snapshot,
                     "create diff snapshot with compression",
                 )),
+                _ => Some((
+                    &METRICS.latencies_us.full_create_snapshot,
+                    "create diff snapshot with compression",
+                )),
             },
             VmmAction::LoadSnapshot(_) => {
                 Some((&METRICS.latencies_us.load_snapshot, "load snapshot"))

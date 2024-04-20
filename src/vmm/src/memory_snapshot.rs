@@ -71,6 +71,15 @@ where
         dirty_bitmap: &DirtyBitmap,
         mem_file_path: Option<&Path>,
     ) -> Result<(), SnapshotMemoryError>;
+    /// For REAP.
+    fn restore_with_reap(
+        file: Option<&File>,
+        state: &GuestMemoryState,
+        track_dirty_pages: bool,
+        snapshot_filename: &Path,
+        do_reap_record: bool,
+        do_compression: bool
+    ) -> Result<Self, SnapshotMemoryError>;
     /// Creates a GuestMemoryMmap given a `file` containing the data
     /// and a `state` containing mapping information.
     fn restore(
@@ -236,6 +245,29 @@ impl SnapshotMemory for GuestMemoryMmap {
                 Ok(())
             })
             .map_err(SnapshotMemoryError::WriteMemory)
+    }
+
+    /// With REAP.
+    fn restore_with_reap(
+        file: Option<&File>,
+        state: &GuestMemoryState,
+        track_dirty_pages: bool,
+        snapshot_filename: &Path,
+        do_reap_record: bool,
+        do_compression: bool
+    ) -> Result<Self, SnapshotMemoryError> {
+        let mut regions = vec![];
+        for region in state.regions.iter() {
+            let f = match file {
+                Some(f) => Some(FileOffset::new(f.try_clone()?, region.offset)),
+                None => None,
+            };
+
+            regions.push((f, GuestAddress(region.base_address), region.size));
+        }
+
+        utils::vm_memory::create_guest_memory_with_reap(&regions, track_dirty_pages, snapshot_filename, do_reap_record, do_compression)
+            .map_err(SnapshotMemoryError::CreateMemory)
     }
 
     /// Creates a GuestMemoryMmap backed by a `file` if present, otherwise backed

@@ -13,6 +13,14 @@ use serde::{Deserialize, Serialize};
 /// creating a new snapshot.
 #[derive(Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub enum SnapshotType {
+    /// REAP snapshots: recording phase
+    REAPRecord,
+    /// REAP snapshot: replaying phase
+    REAPReplay,
+    /// REAP snapshots: recording phase with compression
+    REAPRecordCompress,
+    /// REAP snapshot: replaying phase with compression
+    REAPReplayCompress,
     /// Diff with compression.
     DiffCompressed,
     /// Full with compression.

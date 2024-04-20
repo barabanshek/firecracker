@@ -296,6 +296,9 @@ fn snapshot_memory_to_file(
         }
         SnapshotType::Full => vmm.guest_memory().dump(&mut file).map_err(Memory),
         SnapshotType::FullCompressed => vmm.guest_memory().dump_compress(mem_file_path).map_err(Memory),
+        _ => {
+            return Err(CreateSnapshotError::UnsupportedVersion);
+        }
     }?;
     file.flush()
         .map_err(|err| MemoryBackingFile("flush", err))?;
@@ -509,21 +512,33 @@ pub fn restore_from_snapshot(
     let mem_state = &microvm_state.memory_state;
     let track_dirty_pages = params.enable_diff_snapshots;
 
-    let from_compressed = match &params.snapshot_type {
+    let (from_compressed, for_reap, reap_record) = match &params.snapshot_type {
         Some(value) => match value {
-            SnapshotType::FullCompressed => true,
-            SnapshotType::DiffCompressed => true,
-            _ => false,
+            SnapshotType::FullCompressed => (true, false, false),
+            SnapshotType::DiffCompressed => (true, false, false),
+            SnapshotType::REAPRecord => (false, true, true),
+            SnapshotType::REAPReplay => (false, true, false),
+            SnapshotType::REAPRecordCompress => (true, true, true),
+            SnapshotType::REAPReplayCompress => (true, true, false),
+            _ => (false, false, false),
         }
-        None => false,
+        None => (false, false, false),
     };
+
+    println!("SABRE_FLAGS: {} | {} | {}", from_compressed, for_reap, reap_record);
 
     let (guest_memory, uffd) = match params.mem_backend.backend_type {
         MemBackendType::File => (
-            if from_compressed {
+            if for_reap {
+                // REAP snapshot.
+                guest_memory_with_reap(mem_backend_path, mem_state, track_dirty_pages, reap_record, from_compressed)
+                    .map_err(RestoreFromSnapshotGuestMemoryError::File)?
+            } else if from_compressed {
+                // Sabre snapshot.
                 guest_memory_from_sabre_file(mem_backend_path, mem_state, track_dirty_pages)
                     .map_err(RestoreFromSnapshotGuestMemoryError::File)?
             } else {
+                // Standard snapshot.
                 guest_memory_from_file(mem_backend_path, mem_state, track_dirty_pages)
                     .map_err(RestoreFromSnapshotGuestMemoryError::File)?
             },
@@ -606,6 +621,18 @@ fn guest_memory_from_sabre_file(
 ) -> Result<GuestMemoryMmap, GuestMemoryFromFileError> {
     let mem_file = File::open(mem_file_path)?; // TODO (Nikita): remove
     let guest_mem = GuestMemoryMmap::restore(Some(&mem_file), mem_state, track_dirty_pages, Some(&mem_file_path))?;
+    Ok(guest_mem)
+}
+
+fn guest_memory_with_reap(
+    mem_file_path: &Path,
+    mem_state: &GuestMemoryState,
+    track_dirty_pages: bool,
+    do_reap_record: bool,
+    do_compression: bool
+) -> Result<GuestMemoryMmap, GuestMemoryFromFileError> {
+    let mem_file = File::open(mem_file_path)?; // TODO (Nikita): remove
+    let guest_mem = GuestMemoryMmap::restore_with_reap(Some(&mem_file), mem_state, track_dirty_pages, mem_file_path, do_reap_record, do_compression)?;
     Ok(guest_mem)
 }
 

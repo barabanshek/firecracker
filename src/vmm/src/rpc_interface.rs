@@ -821,6 +821,9 @@ impl RuntimeApiController {
                     elapsed_time_us
                 );
             }
+            _ => {
+                info!("Wrong Case");
+            }
         }
         Ok(VmmData::Empty)
     }
