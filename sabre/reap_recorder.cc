@@ -217,7 +217,7 @@ int ReapRecorder::DumpRecordedPages() {
   acc::MemoryRestorator::MemoryRestoratotConfig cfg = {
       .execution_path = qpl_path_hardware,
       .partition_hanlding_path =
-          do_compress_ ? acc::MemoryRestorator::kHandleAsScatteredPartitions
+          do_compress_ ? acc::MemoryRestorator::kHandleAsSinglePartition
                        : acc::MemoryRestorator::kHandleAsSinglePartition,
       .sigle_partition_handling_path =
           acc::MemoryRestorator::kHandleWithUffdioCopy,
@@ -243,7 +243,7 @@ int ReapRecorder::Restore(uint8_t *mem, size_t size,
   acc::MemoryRestorator::MemoryRestoratotConfig cfg = {
       .execution_path = qpl_path_hardware,
       .partition_hanlding_path =
-          do_compress_ ? acc::MemoryRestorator::kHandleAsScatteredPartitions
+          do_compress_ ? acc::MemoryRestorator::kHandleAsSinglePartition
                        : acc::MemoryRestorator::kHandleAsSinglePartition,
       .sigle_partition_handling_path =
           acc::MemoryRestorator::kHandleWithUffdioCopy,
