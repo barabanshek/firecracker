@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import sys
+import subprocess
 
 # Specify the path to your CSV file
 csv_file_path = sys.argv[1]
@@ -10,8 +11,13 @@ text_size_big = 20
 text_size_medium = 18
 text_size_small = 12
 
+# Filter log file.
+output_csv_file_path = f'{csv_file_path}.out'
+command = f'grep -E "^(name,iterations|\\"BM_Benchmark)" {csv_file_path} > {output_csv_file_path}'
+subprocess.run(command, shell=True, check=True)
+
 # Read the CSV file into a DataFrame
-df = pd.read_csv(csv_file_path)
+df = pd.read_csv(output_csv_file_path)
 
 # Convert the 'label' column to strings
 df['name'] = df['name'].astype(str)
