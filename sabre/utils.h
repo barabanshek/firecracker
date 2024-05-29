@@ -11,10 +11,14 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include <iostream>
+
 // TODO(Nikita): move somewhere else
 namespace sys {
 
+// TODO (Nikita): read it from somewhere.
 static size_t kPageSize = 4096;
+static size_t kHugePageSize = 2 * 1024 * 1024;
 } // namespace sys
 
 namespace utils {
@@ -62,8 +66,11 @@ class Deleter {
 public:
   // Gets called when the owning unique_ptr is released.
   void operator()(void *ptr) const {
-    if (ptr != nullptr)
-      munmap(ptr, size_);
+    if (ptr != nullptr) {
+      int res = munmap(ptr, size_);
+      std::cout << " DELETED: " << res << " ptr: " << std::hex << (void *)(ptr)
+                << std::dec << " size: " << size_ << " \n";
+    }
     if (fd_ != -1)
       close(fd_);
   }
@@ -103,6 +110,11 @@ static Memory allocate(size_t size, int fd = -1, bool huge_pages = false,
     return nullptr;
 
   Memory unique_ptr(ptr);
+  if (huge_pages) {
+    // Round-up to a multiple of the huge page size.
+    if (size % sys::kHugePageSize)
+      size = (size / sys::kHugePageSize + 1) * sys::kHugePageSize;
+  }
   unique_ptr.get_deleter().set_size(size);
   return unique_ptr;
 }

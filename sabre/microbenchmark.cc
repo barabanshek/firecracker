@@ -97,6 +97,7 @@ auto BM_BenchmarkMemoryRestorator = [](benchmark::State &state,
   va_list args;
   va_start(args, Inputs);
   auto execution_path = Inputs;
+  auto additional_execution_path = va_arg(args, int);
   auto sparsity = va_arg(args, size_t);
   auto handling = va_arg(args, int);
   auto passthrough = va_arg(args, int);
@@ -108,6 +109,9 @@ auto BM_BenchmarkMemoryRestorator = [](benchmark::State &state,
   // Do things.
   acc::MemoryRestorator::MemoryRestoratotConfig cfg = {
       .execution_path = execution_path,
+      .additional_execution_path =
+          static_cast<acc::MemoryRestorator::AdditionalExecutionPath>(
+              additional_execution_path),
       .partition_hanlding_path =
           static_cast<acc::MemoryRestorator::PartitionHandlingPath>(handling),
       .sigle_partition_handling_path =
@@ -168,7 +172,8 @@ auto BM_BenchmarkMemoryRestorator = [](benchmark::State &state,
 // Usage:
 //   - export SABRE_DATASET_PATH=...
 //   - export SABRE_DATASET_NAME=...
-//   - sudo -E ./build/sabre/memory_restoration_micro --benchmark_repetitions=10 --benchmark_min_time=1x
+//   - sudo -E ./build/sabre/memory_restoration_micro --benchmark_repetitions=10
+//   --benchmark_min_time=1x
 int main(int argc, char **argv) {
   // Setup.
   std::vector<size_t> sparsities = {1,  2,   4,    10,   20,
@@ -188,21 +193,31 @@ int main(int argc, char **argv) {
     for (auto const &handling :
          {acc::MemoryRestorator::kHandleAsSinglePartition,
           acc::MemoryRestorator::kHandleAsScatteredPartitions}) {
-      for (int passthroug : {0, 1}) {
-        if (passthroug &&
-            handling == acc::MemoryRestorator::kHandleAsScatteredPartitions)
-          continue;
+      for (const int &additional_execution_path :
+           {acc::MemoryRestorator::kNone, acc::MemoryRestorator::kSnappy,
+            acc::MemoryRestorator::kZSTD_1, acc::MemoryRestorator::kZSTD_3,
+            acc::MemoryRestorator::kZSTD_10, acc::MemoryRestorator::kZSTD_20,
+            acc::MemoryRestorator::kLZ4}) {
+        for (int passthroug : {0, 1}) {
+          for (auto const &path : {qpl_path_hardware, qpl_path_software}) {
+            if ((passthroug &&
+                 handling ==
+                     acc::MemoryRestorator::kHandleAsScatteredPartitions) ||
+                (path == qpl_path_hardware &&
+                 additional_execution_path != acc::MemoryRestorator::kNone))
+              continue;
 
-        for (auto const &path : {qpl_path_hardware, qpl_path_software}) {
-          benchmark::RegisterBenchmark(
-              std::string("BM_BenchmarkMemoryRestorator") + "_sparsity_" +
-                  std::to_string(sparsity) + "_handling_" +
-                  std::to_string(handling) + "_passthrough_" +
-                  std::to_string(passthroug) + "_path_" +
-                  (path == qpl_path_hardware ? "qpl_path_hardware"
-                                             : "qpl_path_software"),
-              BM_BenchmarkMemoryRestorator, path, sparsity, handling,
-              passthroug);
+            benchmark::RegisterBenchmark(
+                std::string("BM_BenchmarkMemoryRestorator") + "_sparsity_" +
+                    std::to_string(sparsity) + "_handling_" +
+                    std::to_string(handling) + "_additional_path_" +
+                    std::to_string(additional_execution_path) +
+                    "_passthrough_" + std::to_string(passthroug) + "_path_" +
+                    (path == qpl_path_hardware ? "qpl_path_hardware"
+                                               : "qpl_path_software"),
+                BM_BenchmarkMemoryRestorator, path, additional_execution_path,
+                sparsity, handling, passthroug);
+          }
         }
       }
     }

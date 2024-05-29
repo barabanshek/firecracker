@@ -87,6 +87,21 @@ RUN git clone --recursive https://github.com/intel/qpl.git && cd qpl && \
     cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${QPL_HOME}" .. && \
     make -j && make install
 
+# Install snappy.
+RUN git clone --recursive https://github.com/google/snappy.git && cd snappy && \
+    git submodule update --init && \
+    mkdir build && cd build && \
+    cmake ../ && make -j && make install
+
+# Install zstd.
+RUN git clone https://github.com/facebook/zstd.git && cd zstd && \
+    cd build/cmake && mkdir builddir && cd builddir && \
+    cmake ../ && make -j && make install
+
+# Install lz4.
+RUN git clone https://github.com/lz4/lz4.git && cd lz4 && \
+    make && make install
+
 # Install Google benchmark.
 RUN git clone https://github.com/google/benchmark.git && cd benchmark && \
     cmake -E make_directory "build" && \

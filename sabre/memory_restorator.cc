@@ -21,8 +21,11 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#include "lz4.h"
 #include "memory_restorator.h"
 #include "simple_logging.h"
+#include "snappy.h"
+#include "zstd.h"
 
 namespace logging {
 static constexpr int _g_log_severity_ = LOG_INFO;
@@ -139,6 +142,23 @@ int MemoryRestorator::CompressSingleChunk(qpl_huffman_table_t c_huffman_table,
                                           const uint8_t *src, size_t src_size,
                                           uint8_t *dst, size_t *dst_size,
                                           bool first, bool last) const {
+  // Define output capacity.
+  size_t dst_capacity;
+  if (cfg_.partition_hanlding_path == kHandleAsSinglePartition)
+    // Here, we assume the compressed data will never exceed the original
+    // decompressed.
+    dst_capacity = src_size - 1;
+  else
+    // In scattered partitions, sometimes individual small partitions are not
+    // compressable, so we need to allow some extra space for them.
+    dst_capacity = 2 * src_size - 1;
+
+  // Do SW compression if requested.
+  if (cfg_.additional_execution_path != kNone) {
+    return CompressSingleChunkSW(src, src_size, dst, dst_capacity, dst_size);
+  }
+
+  // Do IAA.
   if (!qpl_initialized_) {
     RLOG(LOG_ERROR) << "QPL is not initialized!";
     return -1;
@@ -154,15 +174,7 @@ int MemoryRestorator::CompressSingleChunk(qpl_huffman_table_t c_huffman_table,
   job->next_in_ptr = const_cast<uint8_t *>(src);
   job->available_in = src_size;
   job->next_out_ptr = dst;
-  if (cfg_.partition_hanlding_path == kHandleAsSinglePartition)
-    // Here, we assume the compressed data will never exceed the original
-    // decompressed; I don't know why -1 is needed, without this, QPL failes.
-    job->available_out = src_size - 1;
-  else
-    // In scattered partitions, sometimes individual small partitions are not
-    // compressable, so we need to allow some extra space for them.
-    job->available_out = 2 * src_size - 1;
-
+  job->available_out = dst_capacity;
   job->flags = QPL_FLAG_OMIT_VERIFY | QPL_FLAG_FIRST | QPL_FLAG_LAST;
 
   // If Huffman tables are not provided - do dynamic Huffman.
@@ -187,11 +199,75 @@ int MemoryRestorator::CompressSingleChunk(qpl_huffman_table_t c_huffman_table,
   return 0;
 }
 
+int MemoryRestorator::CompressSingleChunkSW(const uint8_t *src, size_t src_size,
+                                            uint8_t *dst, size_t dst_capacity,
+                                            size_t *dst_size) const {
+  assert(cfg_.additional_execution_path != kNone);
+
+  // Do Snappy.
+  if (cfg_.additional_execution_path == kSnappy) {
+    snappy::CompressionOptions opt;
+    opt.level = 1; // fastest (de)compression
+    snappy::RawCompress(reinterpret_cast<const char *>(src), src_size,
+                        reinterpret_cast<char *>(dst), dst_size, opt);
+
+    return 0;
+  }
+
+  // Do zstd.
+  if (kZSTD_1 <= cfg_.additional_execution_path &&
+      cfg_.additional_execution_path <= kZSTD_20) {
+    int level = 0;
+    switch (cfg_.additional_execution_path) {
+    case kZSTD_1:
+      level = 1;
+      break;
+    case kZSTD_3:
+      level = 3;
+      break;
+    case kZSTD_10:
+      level = 10;
+      break;
+    case kZSTD_20:
+      level = 20;
+      break;
+    default:
+      assert(false);
+    }
+
+    size_t ret = ZSTD_compress(dst, dst_capacity, src, src_size, level);
+    if (ZSTD_isError(ret))
+      return -1;
+
+    *dst_size = ret;
+    return 0;
+  }
+
+  // Do lz4 if requested.
+  if (cfg_.additional_execution_path == kLZ4) {
+    int ret = LZ4_compress_default(reinterpret_cast<const char *>(src),
+                                   reinterpret_cast<char *>(dst), src_size,
+                                   dst_capacity);
+    if (!ret)
+      return -1;
+
+    *dst_size = ret;
+    return 0;
+  }
+}
+
 int MemoryRestorator::DecompressSingleChunk(const uint8_t *src, size_t src_size,
                                             uint8_t *dst,
                                             size_t dst_reserved_size,
                                             size_t *dst_actual_size,
                                             bool blocking) const {
+  // Do SW compression if requested.
+  if (cfg_.additional_execution_path != kNone) {
+    return DecompressSingleChunkSW(src, src_size, dst, dst_reserved_size,
+                                   dst_actual_size);
+  }
+
+  // Do IAA.
   if (!qpl_initialized_) {
     RLOG(LOG_ERROR) << "QPL is not initialized!";
     return -1;
@@ -232,6 +308,50 @@ int MemoryRestorator::DecompressSingleChunk(const uint8_t *src, size_t src_size,
       return -1;
     }
     return job_id;
+  }
+}
+
+int MemoryRestorator::DecompressSingleChunkSW(const uint8_t *src,
+                                              size_t src_size, uint8_t *dst,
+                                              size_t dst_reserved_size,
+                                              size_t *dst_actual_size) const {
+  assert(cfg_.additional_execution_path != kNone);
+
+  // Do Snappy.
+  if (cfg_.additional_execution_path == kSnappy) {
+    // Get size (this takes O(1) time).
+    if (!snappy::GetUncompressedLength(reinterpret_cast<const char *>(src),
+                                       src_size, dst_actual_size))
+      return -1;
+
+    // Decompress.
+    return snappy::RawUncompress(reinterpret_cast<const char *>(src), src_size,
+                                 reinterpret_cast<char *>(dst))
+               ? 0
+               : -1;
+  }
+
+  // Do zstd.
+  if (kZSTD_1 <= cfg_.additional_execution_path &&
+      cfg_.additional_execution_path <= kZSTD_20) {
+    size_t ret = ZSTD_decompress(dst, dst_reserved_size, src, src_size);
+    if (ZSTD_isError(ret))
+      return -1;
+
+    *dst_actual_size = ret;
+    return 0;
+  }
+
+  // Do lz4.
+  if (cfg_.additional_execution_path == kLZ4) {
+    int ret = LZ4_decompress_safe(reinterpret_cast<const char *>(src),
+                                  reinterpret_cast<char *>(dst), src_size,
+                                  dst_reserved_size);
+    if (ret <= 0)
+      return -1;
+
+    *dst_actual_size = ret;
+    return 0;
   }
 }
 

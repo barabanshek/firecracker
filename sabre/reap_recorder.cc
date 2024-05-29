@@ -216,6 +216,7 @@ int ReapRecorder::DumpRecordedPages() {
   // Write file.
   acc::MemoryRestorator::MemoryRestoratotConfig cfg = {
       .execution_path = qpl_path_hardware,
+      .additional_execution_path = acc::MemoryRestorator::kNone,
       .partition_hanlding_path =
           do_compress_ ? acc::MemoryRestorator::kHandleAsSinglePartition
                        : acc::MemoryRestorator::kHandleAsSinglePartition,
@@ -242,6 +243,7 @@ int ReapRecorder::Restore(uint8_t *mem, size_t size,
   // Note: the snapshot in the MemoryRestorator's context here is the ws file.
   acc::MemoryRestorator::MemoryRestoratotConfig cfg = {
       .execution_path = qpl_path_hardware,
+      .additional_execution_path = acc::MemoryRestorator::kNone,
       .partition_hanlding_path =
           do_compress_ ? acc::MemoryRestorator::kHandleAsSinglePartition
                        : acc::MemoryRestorator::kHandleAsSinglePartition,

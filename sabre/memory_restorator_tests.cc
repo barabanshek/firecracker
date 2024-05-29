@@ -148,6 +148,7 @@ protected:
   // Configs.
   acc::MemoryRestorator::MemoryRestoratotConfig cfg_scattered_dynamic = {
       .execution_path = qpl_path_hardware,
+      .additional_execution_path = acc::MemoryRestorator::kNone,
       .partition_hanlding_path =
           acc::MemoryRestorator::kHandleAsScatteredPartitions,
       .sigle_partition_handling_path =
@@ -160,6 +161,7 @@ protected:
 
   acc::MemoryRestorator::MemoryRestoratotConfig cfg_scattered_static = {
       .execution_path = qpl_path_hardware,
+      .additional_execution_path = acc::MemoryRestorator::kNone,
       .partition_hanlding_path =
           acc::MemoryRestorator::kHandleAsScatteredPartitions,
       .sigle_partition_handling_path =
@@ -172,6 +174,7 @@ protected:
 
   acc::MemoryRestorator::MemoryRestoratotConfig cfg_single_uffdiocopy = {
       .execution_path = qpl_path_hardware,
+      .additional_execution_path = acc::MemoryRestorator::kNone,
       .partition_hanlding_path =
           acc::MemoryRestorator::kHandleAsSinglePartition,
       .sigle_partition_handling_path =
@@ -184,6 +187,7 @@ protected:
 
   acc::MemoryRestorator::MemoryRestoratotConfig cfg_scattered_static_app_owner =
       {.execution_path = qpl_path_hardware,
+       .additional_execution_path = acc::MemoryRestorator::kNone,
        .partition_hanlding_path =
            acc::MemoryRestorator::kHandleAsScatteredPartitions,
        .sigle_partition_handling_path =
@@ -197,6 +201,7 @@ protected:
   acc::MemoryRestorator::MemoryRestoratotConfig
       cfg_single_uffdiocopy_app_owner = {
           .execution_path = qpl_path_hardware,
+          .additional_execution_path = acc::MemoryRestorator::kNone,
           .partition_hanlding_path =
               acc::MemoryRestorator::kHandleAsSinglePartition,
           .sigle_partition_handling_path =
@@ -209,6 +214,7 @@ protected:
 
   acc::MemoryRestorator::MemoryRestoratotConfig cfg_single_passthrough = {
       .execution_path = qpl_path_hardware,
+      .additional_execution_path = acc::MemoryRestorator::kNone,
       .partition_hanlding_path =
           acc::MemoryRestorator::kHandleAsSinglePartition,
       .sigle_partition_handling_path =
@@ -221,6 +227,7 @@ protected:
 
   acc::MemoryRestorator::MemoryRestoratotConfig cfg_scattered_static_multijob =
       {.execution_path = qpl_path_hardware,
+       .additional_execution_path = acc::MemoryRestorator::kNone,
        .partition_hanlding_path =
            acc::MemoryRestorator::kHandleAsScatteredPartitions,
        .sigle_partition_handling_path =

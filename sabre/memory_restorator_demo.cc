@@ -111,6 +111,7 @@ int main(int argc, char **argv) {
   // Configure memory restorator.
   acc::MemoryRestorator::MemoryRestoratotConfig cfg = {
       .execution_path = qpl_path_hardware,
+      .additional_execution_path = acc::MemoryRestorator::kNone,
       .partition_hanlding_path =
           FLAGS_passthrough
               ? acc::MemoryRestorator::kHandleAsSinglePartition

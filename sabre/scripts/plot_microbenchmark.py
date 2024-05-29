@@ -24,23 +24,67 @@ df['name'] = df['name'].astype(str)
 df['real_time'] = df['real_time'] / (1000 * 1000)
 
 # Filter data for handling_0 and handling_1
-df_handling_I_hw = df[df['name'].str.contains("handling_0_passthrough_0_path_qpl_path_hardware_mean")]
-df_handling_II_hw = df[df['name'].str.contains("handling_1_passthrough_0_path_qpl_path_hardware_mean")]
-df_handling_I_sw = df[df['name'].str.contains("handling_0_passthrough_0_path_qpl_path_software_mean")]
-df_handling_II_sw = df[df['name'].str.contains("handling_1_passthrough_0_path_qpl_path_software_mean")]
-df_handling_passthrough = df[df['name'].str.contains("passthrough_1_path_qpl_path_hardware_mean")]
+df_handling_I_hw = df[df['name'].str.contains("handling_0_additional_path_0_passthrough_0_path_qpl_path_hardware_mean")]
+df_handling_II_hw = df[df['name'].str.contains("handling_1_additional_path_0_passthrough_0_path_qpl_path_hardware_mean")]
+df_handling_I_sw = df[df['name'].str.contains("handling_0_additional_path_0_passthrough_0_path_qpl_path_software_mean")]
+df_handling_II_sw = df[df['name'].str.contains("handling_1_additional_path_0_passthrough_0_path_qpl_path_software_mean")]
+df_handling_I_sw_snappy = df[df['name'].str.contains("handling_0_additional_path_1_passthrough_0_path_qpl_path_software_mean")]
+df_handling_II_sw_snappy = df[df['name'].str.contains("handling_1_additional_path_1_passthrough_0_path_qpl_path_software_mean")]
+df_handling_I_sw_zstd1 = df[df['name'].str.contains("handling_0_additional_path_2_passthrough_0_path_qpl_path_software_mean")]
+df_handling_II_sw_zstd1 = df[df['name'].str.contains("handling_1_additional_path_2_passthrough_0_path_qpl_path_software_mean")]
+df_handling_I_sw_zstd3 = df[df['name'].str.contains("handling_0_additional_path_3_passthrough_0_path_qpl_path_software_mean")]
+df_handling_II_sw_zstd3 = df[df['name'].str.contains("handling_1_additional_path_3_passthrough_0_path_qpl_path_software_mean")]
+df_handling_I_sw_zstd10 = df[df['name'].str.contains("handling_0_additional_path_4_passthrough_0_path_qpl_path_software_mean")]
+df_handling_II_sw_zstd10 = df[df['name'].str.contains("handling_1_additional_path_4_passthrough_0_path_qpl_path_software_mean")]
+df_handling_I_sw_zstd20 = df[df['name'].str.contains("handling_0_additional_path_5_passthrough_0_path_qpl_path_software_mean")]
+df_handling_II_sw_zstd20 = df[df['name'].str.contains("handling_1_additional_path_5_passthrough_0_path_qpl_path_software_mean")]
+df_handling_I_sw_lz4 = df[df['name'].str.contains("handling_0_additional_path_6_passthrough_0_path_qpl_path_software_mean")]
+df_handling_II_sw_lz4 = df[df['name'].str.contains("handling_1_additional_path_6_passthrough_0_path_qpl_path_software_mean")]
+df_handling_passthrough = df[df['name'].str.contains("additional_path_0_passthrough_1_path_qpl_path_hardware_mean")]
 
 # Create plots for handling_0 and handling_1
-fig, ax = plt.subplots(1, 2, figsize=(16, 4))
+fig, ax = plt.subplots(1, 8, figsize=(8 * 8, 4))
 ticks = [t for t in range(len(df_handling_I_hw['name']))]
 ax[0].set_title("Hardware-accelerated", fontsize=text_size_medium)
 ax[0].plot(ticks, df_handling_I_hw['real_time'], color='black', marker='o', linewidth=3, label='Single-chunk prefetching')
 ax[0].plot(ticks, df_handling_II_hw['real_time'], color='darkred', marker='o', linewidth=3, label='Scattered prefetching')
 ax[0].plot(ticks, df_handling_passthrough['real_time'], color='black', linewidth=2, label='Passthrough', linestyle='--')
+
 ax[1].set_title("Software-based", fontsize=text_size_medium)
 ax[1].plot(ticks, df_handling_I_sw['real_time'], color='black', marker='o', linewidth=3, label='Single-chunk prefetching')
 ax[1].plot(ticks, df_handling_II_sw['real_time'], color='darkred', marker='o', linewidth=3, label='Scattered prefetching')
 ax[1].plot(ticks, df_handling_passthrough['real_time'], color='black', linewidth=2, label='Passthrough', linestyle='--')
+
+ax[2].set_title("Software-based (Snappy)", fontsize=text_size_medium)
+ax[2].plot(ticks, df_handling_I_sw_snappy['real_time'], color='black', marker='x', linewidth=3, label='Single-chunk prefetching')
+ax[2].plot(ticks, df_handling_II_sw_snappy['real_time'], color='darkred', marker='x', linewidth=3, label='Scattered prefetching')
+ax[2].plot(ticks, df_handling_passthrough['real_time'], color='black', linewidth=2, label='Passthrough', linestyle='--')
+
+ax[3].set_title("Software-based (ZSTD_1)", fontsize=text_size_medium)
+ax[3].plot(ticks, df_handling_I_sw_zstd1['real_time'], color='black', marker='x', linewidth=3, label='Single-chunk prefetching')
+ax[3].plot(ticks, df_handling_II_sw_zstd1['real_time'], color='darkred', marker='x', linewidth=3, label='Scattered prefetching')
+ax[3].plot(ticks, df_handling_passthrough['real_time'], color='black', linewidth=2, label='Passthrough', linestyle='--')
+
+ax[4].set_title("Software-based (ZSTD_3)", fontsize=text_size_medium)
+ax[4].plot(ticks, df_handling_I_sw_zstd3['real_time'], color='black', marker='x', linewidth=3, label='Single-chunk prefetching')
+ax[4].plot(ticks, df_handling_II_sw_zstd3['real_time'], color='darkred', marker='x', linewidth=3, label='Scattered prefetching')
+ax[4].plot(ticks, df_handling_passthrough['real_time'], color='black', linewidth=2, label='Passthrough', linestyle='--')
+
+ax[5].set_title("Software-based (ZSTD_10)", fontsize=text_size_medium)
+ax[5].plot(ticks, df_handling_I_sw_zstd10['real_time'], color='black', marker='x', linewidth=3, label='Single-chunk prefetching')
+ax[5].plot(ticks, df_handling_II_sw_zstd10['real_time'], color='darkred', marker='x', linewidth=3, label='Scattered prefetching')
+ax[5].plot(ticks, df_handling_passthrough['real_time'], color='black', linewidth=2, label='Passthrough', linestyle='--')
+
+ax[6].set_title("Software-based (ZSTD_22)", fontsize=text_size_medium)
+ax[6].plot(ticks, df_handling_I_sw_zstd20['real_time'], color='black', marker='x', linewidth=3, label='Single-chunk prefetching')
+ax[6].plot(ticks, df_handling_II_sw_zstd20['real_time'], color='darkred', marker='x', linewidth=3, label='Scattered prefetching')
+ax[6].plot(ticks, df_handling_passthrough['real_time'], color='black', linewidth=2, label='Passthrough', linestyle='--')
+
+ax[7].set_title("Software-based (LZ4)", fontsize=text_size_medium)
+ax[7].plot(ticks, df_handling_I_sw_lz4['real_time'], color='black', marker='x', linewidth=3, label='Single-chunk prefetching')
+ax[7].plot(ticks, df_handling_II_sw_lz4['real_time'], color='darkred', marker='x', linewidth=3, label='Scattered prefetching')
+ax[7].plot(ticks, df_handling_passthrough['real_time'], color='black', linewidth=2, label='Passthrough', linestyle='--')
+
 for axx in ax:
     axx.set_xticks(ticks)
     axx.set_xticklabels(sparsities, fontsize=text_size_medium, rotation=45)

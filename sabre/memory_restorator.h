@@ -39,8 +39,22 @@ public:
   // application.
   typedef enum { kMemoryRestorator, kUserApplication } RestoredMemoryOwner;
 
+  // Execution path for non-DEFLATE sw algorithms (used only for
+  // microbenchmarking).
+  typedef enum {
+    kNone,   // use IAA (default)
+    kSnappy, // use Snappy (level 1 - the fastest)
+    kZSTD_1, // use zstd
+    kZSTD_3,
+    kZSTD_10,
+    kZSTD_20,
+    kLZ4 // use default LZ4 (level 1), don't try speed-up (LZ4_compress_fast) as
+         // it does not affect the decompression speed.
+  } AdditionalExecutionPath;
+
   struct MemoryRestoratotConfig {
     qpl_path_t execution_path; // Do in qpl_path_hardware or qpl_path_software.
+    AdditionalExecutionPath additional_execution_path;
     PartitionHandlingPath partition_hanlding_path;
     SinglePartitionHandlingPath sigle_partition_handling_path;
     ScatteredPartitionHandlingPath scattered_partition_handling_path;
@@ -64,6 +78,7 @@ public:
   // synthetic cases.
   static constexpr MemoryRestoratotConfig default_cfg = {
       .execution_path = qpl_path_hardware,
+      .additional_execution_path = kNone,
       .partition_hanlding_path =
           acc::MemoryRestorator::kHandleAsScatteredPartitions,
       .sigle_partition_handling_path =
@@ -184,6 +199,13 @@ private:
   int DecompressSingleChunk(const uint8_t *src, size_t src_size, uint8_t *dst,
                             size_t dst_reserved_size, size_t *dst_actual_size,
                             bool blocking = true) const;
+
+  // SW (de)compression.
+  int CompressSingleChunkSW(const uint8_t *src, size_t src_size, uint8_t *dst,
+                            size_t dst_capacity, size_t *dst_size) const;
+  int DecompressSingleChunkSW(const uint8_t *src, size_t src_size, uint8_t *dst,
+                              size_t dst_reserved_size,
+                              size_t *dst_actual_size) const;
 
   // AUX.
   uint8_t *GetMemoryFromMemPool(size_t size);

@@ -27,7 +27,7 @@ FetchContent_MakeAvailable(googletest)
 add_library(memory_restorator memory_restorator.cc reap_recorder.cc)
 target_include_directories(memory_restorator PUBLIC $ENV{QPL_HOME}/include/)
 target_link_directories(memory_restorator PUBLIC $ENV{QPL_HOME}/lib)
-target_link_libraries(memory_restorator qpl dl gflags)
+target_link_libraries(memory_restorator qpl dl gflags snappy zstd lz4)
 
 # C library
 add_library(memory_restorator-c memory_restorator-c.cc)
