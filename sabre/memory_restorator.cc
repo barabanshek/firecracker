@@ -5,7 +5,6 @@
 #include <memory>
 #include <thread>
 
-#define _GNU_SOURCE
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -140,8 +139,8 @@ int MemoryRestorator::ComputeHuffmanTables(
 
 int MemoryRestorator::CompressSingleChunk(qpl_huffman_table_t c_huffman_table,
                                           const uint8_t *src, size_t src_size,
-                                          uint8_t *dst, size_t *dst_size,
-                                          bool first, bool last) const {
+                                          uint8_t *dst,
+                                          size_t *dst_size) const {
   // Define output capacity.
   size_t dst_capacity;
   if (cfg_.partition_hanlding_path == kHandleAsSinglePartition)
@@ -251,9 +250,12 @@ int MemoryRestorator::CompressSingleChunkSW(const uint8_t *src, size_t src_size,
     if (!ret)
       return -1;
 
-    *dst_size = ret;
+    *dst_size = static_cast<size_t>(ret);
     return 0;
   }
+
+  RLOG(LOG_ERROR) << "Unknown compression mode.";
+  return 1;
 }
 
 int MemoryRestorator::DecompressSingleChunk(const uint8_t *src, size_t src_size,
@@ -350,14 +352,19 @@ int MemoryRestorator::DecompressSingleChunkSW(const uint8_t *src,
     if (ret <= 0)
       return -1;
 
-    *dst_actual_size = ret;
+    *dst_actual_size = static_cast<size_t>(ret);
     return 0;
   }
+
+  RLOG(LOG_ERROR) << "Unknown compression mode.";
+  return 1;
 }
 
 int MemoryRestorator::MakeSnapshot(
     const MemoryPartitions &src_memory_partitions,
     uint64_t base_address) const {
+  utils::TimeScope time_begin;
+
   size_t src_total_size = 0;
   for (auto const &[p_ptr, p_size] : src_memory_partitions)
     src_total_size += p_size;
@@ -384,9 +391,8 @@ int MemoryRestorator::MakeSnapshot(
   if (!cfg_.passthrough) {
     if (cfg_.partition_hanlding_path == kHandleAsSinglePartition) {
       // Compress all chunks together.
-      int ret =
-          CompressSingleChunk(nullptr, src.get(), src_total_size, dst.get(),
-                              &dst_compressed_total_size, true, true);
+      int ret = CompressSingleChunk(nullptr, src.get(), src_total_size,
+                                    dst.get(), &dst_compressed_total_size);
       if (ret) {
         RLOG(LOG_ERROR) << "An error acquired during compression.";
         return -1;
@@ -408,8 +414,7 @@ int MemoryRestorator::MakeSnapshot(
       for (auto const &[p_ptr, p_size] : src_memory_partitions) {
         if (CompressSingleChunk(c_huffman_table, p_ptr, p_size,
                                 dst.get() + dst_compressed_total_size,
-                                &compressed_size, p_id == 0,
-                                p_id == src_memory_partitions.size() - 1)) {
+                                &compressed_size)) {
           RLOG(LOG_ERROR) << "An error acquired during compression.";
           return -1;
         }
@@ -455,7 +460,7 @@ int MemoryRestorator::MakeSnapshot(
         cfg_.passthrough)
       p_info.compressed_size = -1;
     else
-      p_info.compressed_size = dst_partition_sizes[i];
+      p_info.compressed_size = static_cast<int64_t>(dst_partition_sizes[i]);
     if (write(partition_info_fd, &p_info, sizeof(PartitionInfo)) !=
         sizeof(PartitionInfo)) {
       RLOG(LOG_ERROR) << "Error during write.";
@@ -497,7 +502,10 @@ int MemoryRestorator::MakeSnapshot(
   fsync(snapshot_fd);
   close(snapshot_fd);
 
+  auto took = time_begin.GetAbsoluteTimeStamp<std::chrono::microseconds>();
+
   RLOG(LOG_INFO) << "Snapshot created:";
+  RLOG(LOG_INFO) << "    took (us): " << took;
   RLOG(LOG_INFO) << "    name: " << snapshot_filename_;
   RLOG(LOG_INFO) << "    # of partitions: " << p_number;
   RLOG(LOG_INFO) << "    original size (B): " << src_total_size;
@@ -611,7 +619,7 @@ int MemoryRestorator::RestoreFromSnapshot(
     if (p_info.compressed_size != -1) {
       src_offset_size.push_back(
           std::make_tuple(p_offset, p_info.compressed_size));
-      p_offset += p_info.compressed_size;
+      p_offset += static_cast<size_t>(p_info.compressed_size);
     }
     total_decompress_size += p_info.original_size;
     RLOG(LOG_VERBAL) << "    " << i << ": " << std::hex
@@ -654,7 +662,7 @@ int MemoryRestorator::RestoreFromSnapshot(
     lseek(snapshot_fd, 0L, SEEK_SET);
 
     // Advise sequential access to the snapshot file by IAA hardware.
-    if (posix_fadvise(snapshot_fd, 0x00, snapshot_file_size,
+    if (posix_fadvise(snapshot_fd, 0x00, static_cast<off_t>(snapshot_file_size),
                       POSIX_FADV_SEQUENTIAL)) {
       RLOG(LOG_ERROR) << "Error during posix_fadvise.";
       return -1;
@@ -682,7 +690,7 @@ int MemoryRestorator::RestoreFromSnapshot(
     // Fetch.
     src = utils::m_mmap::allocate(snapshot_file_size, -1, false, false);
     if (read(snapshot_fd, src.get(), snapshot_file_size) !=
-        snapshot_file_size) {
+        static_cast<ssize_t>(snapshot_file_size)) {
       RLOG(LOG_ERROR) << "Failed to pre-fetch snapshot file.";
       return -1;
     }
@@ -904,7 +912,6 @@ void MemoryRestorator::fault_handler_thread(void *arg) {
   auto uffd = (long)arg;
   pollfd pollfd;
   uffdio_copy uffdio_copy;
-  uffdio_zeropage uffdio_zero_page;
   uffdio_continue uffdio_continue;
   uffd_msg msg;
 

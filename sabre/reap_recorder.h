@@ -58,7 +58,6 @@ private:
 
   std::thread userfaultfd_thread_;
   volatile bool do_record_ = false;
-  volatile bool do_serve_ = false;
   int UserfaultfdPoll(uint64_t *fault_addr) const;
   void userfaultfd_handler_record_();
 

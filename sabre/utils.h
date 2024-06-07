@@ -67,9 +67,7 @@ public:
   // Gets called when the owning unique_ptr is released.
   void operator()(void *ptr) const {
     if (ptr != nullptr) {
-      int res = munmap(ptr, size_);
-      std::cout << " DELETED: " << res << " ptr: " << std::hex << (void *)(ptr)
-                << std::dec << " size: " << size_ << " \n";
+      munmap(ptr, size_);
     }
     if (fd_ != -1)
       close(fd_);
@@ -128,7 +126,7 @@ static Memory shem_allocate(size_t size, int *fd) {
     if (*fd == -1) {
       return Memory(nullptr);
     }
-    if (ftruncate(*fd, size)) {
+    if (ftruncate(*fd, static_cast<__off_t>(size))) {
       return Memory(nullptr);
     }
     fresh = true;

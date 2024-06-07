@@ -42,7 +42,7 @@ static CompressionDataset load_corpus_dataset(const char *dataset_path) {
     RLOG(LOG_INFO) << "Found file: " << filename << " of size: " << fd_size
                    << " B";
     uint8_t *mem = reinterpret_cast<uint8_t *>(malloc(fd_size));
-    if (read(fd, mem, fd_size) != fd_size)
+    if (read(fd, mem, fd_size) != static_cast<ssize_t>(fd_size))
       RLOG(LOG_ERROR) << "Failed to read benchmark file " << filename;
     dataset[filename_] = std::make_tuple(fd_size, mem);
   }
@@ -189,20 +189,23 @@ int main(int argc, char **argv) {
   make_datasets(dataset_path, dataset_name, sparsities);
 
   // Register benchmarks.
-  for (auto const &sparsity : sparsities) {
-    for (auto const &handling :
+  for (auto const sparsity : sparsities) {
+    for (auto const handling :
          {acc::MemoryRestorator::kHandleAsSinglePartition,
           acc::MemoryRestorator::kHandleAsScatteredPartitions}) {
-      for (const int &additional_execution_path :
+      for (const int additional_execution_path :
            {acc::MemoryRestorator::kNone, acc::MemoryRestorator::kSnappy,
             acc::MemoryRestorator::kZSTD_1, acc::MemoryRestorator::kZSTD_3,
             acc::MemoryRestorator::kZSTD_10, acc::MemoryRestorator::kZSTD_20,
             acc::MemoryRestorator::kLZ4}) {
         for (int passthroug : {0, 1}) {
-          for (auto const &path : {qpl_path_hardware, qpl_path_software}) {
+          for (auto const path : {qpl_path_hardware, qpl_path_software}) {
             if ((passthroug &&
                  handling ==
                      acc::MemoryRestorator::kHandleAsScatteredPartitions) ||
+                (passthroug && path == qpl_path_hardware) ||
+                (passthroug &&
+                 additional_execution_path != acc::MemoryRestorator::kNone) ||
                 (path == qpl_path_hardware &&
                  additional_execution_path != acc::MemoryRestorator::kNone))
               continue;

@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cassert>
 
-#define _GNU_SOURCE
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>

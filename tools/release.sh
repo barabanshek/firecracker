@@ -107,7 +107,7 @@ make -j
 popd
 
 # Export environment for the rust FFI.
-export RUSTFLAGS="-L ${SABRE_BUILD_DIR} -L ${QPL_HOME}/lib -lstdc++ -lqpl -lmemory_restorator -lmemory_restorator-c -lglog"
+export RUSTFLAGS="-L ${SABRE_BUILD_DIR} -L ${QPL_HOME}/lib -lstdc++ -lqpl -lmemory_restorator -lmemory_restorator-c -lglog -lsnappy -lzstd -llz4"
 
 ARCH=$(uname -m)
 VERSION=$(get-firecracker-version)

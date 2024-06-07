@@ -65,13 +65,13 @@ public:
 
   // Performance metrics to measure time in the page restoration critical path.
   struct Metrics {
-    uint64_t mmap_dst_mem;
-    uint64_t get_partition_info;
-    uint64_t mmap_snapshot;
-    uint64_t mmap_decompression_buff;
-    uint64_t decompress;
-    uint64_t install_pages;
-    uint64_t mem_restore_total;
+    long mmap_dst_mem;
+    long get_partition_info;
+    long mmap_snapshot;
+    long mmap_decompression_buff;
+    long decompress;
+    long install_pages;
+    long mem_restore_total;
   };
 
   // This configuration shows the best performance of memory restoration on most
@@ -157,14 +157,16 @@ private:
 
     auto job_i = qpl_job_idx_free_.front();
     qpl_job_idx_free_.pop();
-    *job = reinterpret_cast<qpl_job *>(qpl_job_buffers_[job_i].get());
+    *job = reinterpret_cast<qpl_job *>(
+        qpl_job_buffers_[static_cast<size_t>(job_i)].get());
     return job_i;
   }
 
   void ReturnQplJob(int job_i) const { qpl_job_idx_free_.push(job_i); }
 
   bool IsJobReady(int job_i, size_t *ret_size) const {
-    auto job = reinterpret_cast<qpl_job *>(qpl_job_buffers_[job_i].get());
+    auto job = reinterpret_cast<qpl_job *>(
+        qpl_job_buffers_[static_cast<size_t>(job_i)].get());
     auto status = qpl_check_job(job);
     if (status != QPL_STS_BEING_PROCESSED) {
       assert(status == QPL_STS_OK);
@@ -195,7 +197,7 @@ private:
                            qpl_huffman_table_t *c_huffman_table) const;
   int CompressSingleChunk(qpl_huffman_table_t c_huffman_table,
                           const uint8_t *src, size_t src_size, uint8_t *dst,
-                          size_t *dst_size, bool first, bool last) const;
+                          size_t *dst_size) const;
   int DecompressSingleChunk(const uint8_t *src, size_t src_size, uint8_t *dst,
                             size_t dst_reserved_size, size_t *dst_actual_size,
                             bool blocking = true) const;
